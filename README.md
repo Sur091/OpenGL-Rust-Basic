@@ -4,6 +4,9 @@ This project demonstrates the creation of a simple window using the GLFW library
 ## Features
 - Creates a window with a title and specified dimensions.
 ```rust
+const TITLE: &str = "My First GLFW window";
+const WIDTH: u32 = 800;
+const HEIGHT: u32 = 600;
 let mut glfw = glfw::init(fail_on_errors!()).unwrap();
 let (mut window, events) = glfw
         .create_window(WIDTH, HEIGHT, TITLE, glfw::WindowMode::Windowed)
@@ -31,8 +34,8 @@ let mut shader = Shader::new(VERT_SHADER_PATH, FRAG_SHADER_PATH);
 const SIZE: f32 = 0.5;
 const VERTICES: [f32; 12] = [
     -SIZE, -SIZE, 0.0, 
-        SIZE, -SIZE, 0.0, 
-        SIZE,  SIZE, 0.0,
+     SIZE, -SIZE, 0.0, 
+     SIZE,  SIZE, 0.0,
     -SIZE,  SIZE, 0.0,
 ];
 
@@ -67,7 +70,52 @@ unsafe {
 }
 ```
 - Handles basic user input (escape key to close).
+```rust
+while !window.should_close() {
+    glfw.poll_events();
+    for (_, event) in glfw::flush_messages(&events) {
+        glfw_handle_event(&mut window, event);
+    }
+    // ... (remaining code for drawing)
+}
+
+// ...
+fn glfw_handle_event(window: &mut glfw::Window, event: glfw::WindowEvent) {
+    use glfw::Action;
+    use glfw::Key;
+    use glfw::WindowEvent as Event;
+
+    match event {
+        Event::Key(Key::Escape, _, Action::Press, _) => {
+            window.set_should_close(true);
+        }
+        _ => {}
+    }
+}
+```
 - Optionally enables OpenGL debug messages for detailed error reporting (debug mode only).
+```rust
+#[cfg(debug_assertions)]
+unsafe {
+    gl::Enable(gl::DEBUG_OUTPUT);
+    gl::DebugMessageCallback(Some(message_callback), std::ptr::null());
+}
+
+// ... 
+
+#[allow(dead_code)]
+extern "system" fn message_callback(
+    source: gl::types::GLenum,
+    ty: gl::types::GLenum,
+    _id: gl::types::GLuint,
+    severity: gl::types::GLenum,
+    _length: gl::types::GLsizei,
+    message: *const gl::types::GLchar,
+    _user_param: *mut std::os::raw::c_void,
+) {
+    // ...
+}
+```
 - Prints OpenGL and GLSL version information upon startup.
 
 ## Running the Project
