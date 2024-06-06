@@ -22,7 +22,7 @@ pub fn run() {
         glfw::OpenGlProfileHint::Core,
     ));
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
-    glfw.window_hint(glfw::WindowHint::Resizable(true));
+    glfw.window_hint(glfw::WindowHint::Resizable(false));
 
     let (mut window, events) = glfw
         .create_window(WIDTH, HEIGHT, TITLE, glfw::WindowMode::Windowed)
@@ -87,6 +87,8 @@ pub fn run() {
         gl_get_string(gl::SHADING_LANGUAGE_VERSION)
     );
 
+    let start_time = std::time::Instant::now();
+
     while !window.should_close() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
@@ -98,6 +100,7 @@ pub fn run() {
         shader.bind();
         let (screen_width, screen_height) = window.get_framebuffer_size();
         shader.set_uniform_1f("u_aspect_ratio", screen_width as f32 / screen_height as f32);
+        shader.set_uniform_1f("u_time", start_time.elapsed().as_secs_f32());
         vao.bind();
         ib.bind();
         unsafe {
