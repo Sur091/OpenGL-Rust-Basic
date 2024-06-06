@@ -17,7 +17,7 @@ void main()
     vec2 uv = vertex_uv.xy + 0.5;
     uv.x *= u_aspect_ratio;
 
-    uv = fract(uv * 2.);
+    uv = fract(uv * 10.);
 
     uv -= 0.5;
     uv = rotate2D(sin(u_time)) * uv;
