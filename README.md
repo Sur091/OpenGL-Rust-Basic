@@ -130,10 +130,10 @@ glfw: A library for creating windows, contexts, and handling input.
 ## Project Structure
 The project uses the following modules:
 
-index_buffer: Manages index buffer objects for efficient rendering.
-shader: Loads and compiles vertex and fragment shaders.
-vertex_array: Manages vertex array objects (VAOs) and vertex buffer layouts.
-lib.rs: The main entry point containing the application logic.
+- index_buffer: Manages index buffer objects for efficient rendering.
+- shader: Loads and compiles vertex and fragment shaders.
+- vertex_array: Manages vertex array objects (VAOs) and vertex buffer layouts.
+- lib.rs: The main entry point containing the application logic.
 
 ## Contributing
 Feel free to fork this repository and make your own modifications!

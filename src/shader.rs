@@ -60,6 +60,12 @@ impl<'a> Shader<'a> {
         }
     }
 
+    pub fn set_uniform_mat4f(&mut self, name: &str, proj: &nalgebra_glm::Mat4) {
+        unsafe {
+            gl::UniformMatrix4fv(self.get_uniform_location(name), 1, gl::FALSE, proj.as_ptr().cast())
+        }
+    }
+
     #[allow(dead_code)]
     pub fn unbind(&self) {
         unsafe {
@@ -76,6 +82,20 @@ impl<'a> Shader<'a> {
             gl::AttachShader(program, vs);
             gl::AttachShader(program, fs);
             gl::LinkProgram(program);
+            let mut success = 0;
+            gl::GetProgramiv(program, gl::LINK_STATUS, &mut success);
+            if success == 0 {
+              let mut v: Vec<u8> = Vec::with_capacity(1024);
+              let mut log_len = 0_i32;
+              gl::GetProgramInfoLog(
+                program,
+                1024,
+                &mut log_len,
+                v.as_mut_ptr().cast(),
+              );
+              v.set_len(log_len.try_into().unwrap());
+              panic!("Program Link Error: {}", String::from_utf8_lossy(&v));
+            }
             gl::ValidateProgram(program);
 
             gl::DeleteShader(vs);
@@ -90,9 +110,9 @@ impl<'a> Shader<'a> {
         let fragment_source = std::fs::read_to_string(fragment_file_path)
             .expect(format!("Can't open the file {fragment_file_path}").as_str());
         return ShaderProgramSource {
-            vertex_source, 
+            vertex_source,
             fragment_source,
-        }
+        };
     }
 
     fn compile_shader(shader_type: u32, source: &str) -> u32 {
@@ -109,13 +129,17 @@ impl<'a> Shader<'a> {
             let mut success = 0;
             gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut success);
             if success == 0 {
-                let mut v: Vec<u8> = Vec::with_capacity(1024);
+                let mut v: Vec<u8> = Vec::with_capacity(512);
                 let mut log_len = 0_i32;
-                gl::GetShaderInfoLog(shader, 1024, &mut log_len, v.as_mut_ptr().cast());
+                gl::GetShaderInfoLog(shader, 512, &mut log_len, v.as_mut_ptr().cast());
                 v.set_len(log_len.try_into().unwrap());
                 panic!(
                     "{} Shader Compile Error: {}",
-                    if shader_type == gl::FRAGMENT_SHADER {"Fragment"} else {"Vertex"},
+                    if shader_type == gl::FRAGMENT_SHADER {
+                        "Fragment"
+                    } else {
+                        "Vertex"
+                    },
                     String::from_utf8_lossy(&v)
                 );
             }
@@ -125,7 +149,7 @@ impl<'a> Shader<'a> {
 
     fn get_uniform_location(&mut self, name: &str) -> i32 {
         match self.uniform_location_cache.get(name) {
-            Some(uniform_location) => *uniform_location, 
+            Some(uniform_location) => *uniform_location,
             None => {
                 let location: i32 = unsafe {
                     let c_string = std::ffi::CString::new(name).unwrap();
@@ -134,7 +158,8 @@ impl<'a> Shader<'a> {
                 if location == -1 {
                     println!("Warning: Uniform {name} doesn't exist.");
                 }
-                self.uniform_location_cache.insert(name.to_owned(), location);
+                self.uniform_location_cache
+                    .insert(name.to_string(), location);
                 location
             }
         }

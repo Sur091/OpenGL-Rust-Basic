@@ -2,17 +2,22 @@ use glfw::Context;
 
 mod index_buffer;
 mod shader;
+mod texture;
+mod vertex_buffer;
 mod vertex_array;
+mod renderer;
 
 use index_buffer::IndexBuffer;
-use vertex_array::vertex_buffer::VertexBuffer;
+use renderer::Renderer;
+use shader::Shader;
+use texture::Texture;
+use vertex_buffer::VertexBuffer;
 use vertex_array::vertex_buffer_layout::VertexBufferLayout;
 use vertex_array::VertexArray;
-use shader::Shader;
 
 const TITLE: &str = "My First GLFW window";
 const WIDTH: u32 = 800;
-const HEIGHT: u32 = 600;
+const HEIGHT: u32 = 800;
 
 pub fn run() {
     use glfw::fail_on_errors;
@@ -29,9 +34,21 @@ pub fn run() {
         .unwrap();
     let (screen_width, screen_height) = window.get_framebuffer_size();
 
+    window.set_framebuffer_size_callback(|_window, x, y| unsafe { gl::Viewport(0, 0, x, y) });
+
     window.make_current();
     window.set_key_polling(true);
     gl::load_with(|ptr| window.get_proc_address(ptr) as *const _);
+
+    unsafe {
+        gl::Viewport(0, 0, WIDTH as i32, HEIGHT as i32);
+    }
+
+    // Set up for basic texture
+    unsafe {
+        gl::Enable(gl::BLEND);
+        gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+    }
 
     // Enable error handling
     #[cfg(debug_assertions)]
@@ -52,33 +69,42 @@ pub fn run() {
 
     let mut shader = Shader::new(VERT_SHADER_PATH, FRAG_SHADER_PATH);
 
-    const SIZE: f32 = 0.5;
-    const VERTICES: [f32; 12] = [
-        -SIZE, -SIZE, 0.0, 
-         SIZE, -SIZE, 0.0, 
-         SIZE,  SIZE, 0.0,
-        -SIZE,  SIZE, 0.0,
+    // const SIZE: f32 = 0.5;
+    const VERTICES: [f32; 16] = [
+        200.0, 200.0, 0.0, 0.0,
+        600.0, 200.0, 1.0, 0.0,
+        600.0, 600.0, 1.0, 1.0,
+        200.0, 600.0, 0.0, 1.0,
     ];
 
-    const INDICES: [u32; 6] = [
-        0, 1, 2,
-        0, 2, 3,
-    ];
+    const INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
 
     let vao = VertexArray::new();
 
     let vbo = VertexBuffer::new(&VERTICES);
 
+    let ib = IndexBuffer::new(&INDICES);
+
     let mut layout = VertexBufferLayout::new();
-    layout.push_f32(3);
+    layout.push_f32(2);
+    layout.push_f32(2);
+    // layout.push_f32(3);
 
     vao.add_buffer(&vbo, &layout);
 
+    let texture = Texture::new("./assets/purpleNightFlower3.png");
+    texture.bind(0);
+    // println!("texture binding");
+    shader.bind();
+    shader.set_uniform_1i("u_texture", 0_i32);
+    // println!("Texture uniform fitting");
+
     vbo.unbind();
     vao.unbind();
-
-    let ib = IndexBuffer::new(&INDICES);
     ib.unbind();
+    shader.unbind();
+
+    let renderer = Renderer {};
 
     // -------------------------------------------
     println!("OpenGL version: {}", gl_get_string(gl::VERSION));
@@ -87,7 +113,7 @@ pub fn run() {
         gl_get_string(gl::SHADING_LANGUAGE_VERSION)
     );
 
-    let start_time = std::time::Instant::now();
+    let _start_time = std::time::Instant::now();
 
     while !window.should_close() {
         glfw.poll_events();
@@ -97,16 +123,21 @@ pub fn run() {
 
         clear_color(Color(0.3, 0.4, 0.6, 1.0));
 
+        
         shader.bind();
         let (screen_width, screen_height) = window.get_framebuffer_size();
-        shader.set_uniform_1f("u_aspect_ratio", screen_width as f32 / screen_height as f32);
-        shader.set_uniform_1f("u_time", start_time.elapsed().as_secs_f32());
+
+        let proj = nalgebra_glm::ortho(0.0, screen_width as f32, 0.0, screen_height as f32, -1.0, 1.0);
+
+        // shader.set_uniform_1f("u_aspect_ratio", screen_width as f32 / screen_height as f32);
+        // shader.set_uniform_1f("u_time", start_time.elapsed().as_secs_f32());
+        shader.set_uniform_mat4f("u_MVP", &proj);
         vao.bind();
         ib.bind();
-        unsafe {
-            gl::Clear(gl::COLOR_BUFFER_BIT);
-            gl::DrawElements(gl::TRIANGLES, ib.get_count(), gl::UNSIGNED_INT, 0 as *const _);
-        }
+        
+        renderer.clear();
+        renderer.draw(&vao, &ib, &shader);
+
         vao.unbind();
         ib.unbind();
 
@@ -149,9 +180,7 @@ extern "system" fn message_callback(
     message: *const gl::types::GLchar,
     _user_param: *mut std::os::raw::c_void,
 ) {
-    let message_str = unsafe {
-        std::ffi::CStr::from_ptr(message).to_string_lossy()
-    };
+    let message_str = unsafe { std::ffi::CStr::from_ptr(message).to_string_lossy() };
 
     let message_source = match source {
         gl::DEBUG_SOURCE_API => "OpenGL API",
@@ -160,7 +189,7 @@ extern "system" fn message_callback(
         gl::DEBUG_SOURCE_THIRD_PARTY => "Third Party",
         gl::DEBUG_SOURCE_APPLICATION => "Application",
         gl::DEBUG_SOURCE_OTHER => "Other",
-        _ => "Unknown"
+        _ => "Unknown",
     };
 
     let message_type = match ty {

@@ -1,4 +1,4 @@
-pub mod vertex_buffer;
+
 pub mod vertex_buffer_layout;
 
 pub struct VertexArray {
@@ -28,7 +28,7 @@ impl VertexArray {
 
     pub fn add_buffer(
         &self,
-        vb: &vertex_buffer::VertexBuffer,
+        vb: &super::vertex_buffer::VertexBuffer,
         layout: &vertex_buffer_layout::VertexBufferLayout,
     ) {
         self.bind();
