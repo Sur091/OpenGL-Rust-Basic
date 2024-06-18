@@ -1,4 +1,3 @@
-
 pub mod vertex_buffer_layout;
 
 pub struct VertexArray {

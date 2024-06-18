@@ -1,19 +1,19 @@
 use glfw::Context;
 
 mod index_buffer;
+mod renderer;
 mod shader;
 mod texture;
-mod vertex_buffer;
 mod vertex_array;
-mod renderer;
+mod vertex_buffer;
 
 use index_buffer::IndexBuffer;
 use renderer::Renderer;
 use shader::Shader;
 use texture::Texture;
-use vertex_buffer::VertexBuffer;
 use vertex_array::vertex_buffer_layout::VertexBufferLayout;
 use vertex_array::VertexArray;
+use vertex_buffer::VertexBuffer;
 
 const TITLE: &str = "My First GLFW window";
 const WIDTH: u32 = 800;
@@ -71,10 +71,10 @@ pub fn run() {
 
     // const SIZE: f32 = 0.5;
     const VERTICES: [f32; 16] = [
-        200.0, 200.0, 0.0, 0.0,
-        600.0, 200.0, 1.0, 0.0,
-        600.0, 600.0, 1.0, 1.0,
-        200.0, 600.0, 0.0, 1.0,
+        -0.2, -0.4, 0.0, 0.0,
+         0.2, -0.4, 2.0, 0.0,
+         0.2,  0.4, 2.0, 2.0,
+        -0.2,  0.4, 0.0, 2.0,
     ];
 
     const INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
@@ -92,17 +92,18 @@ pub fn run() {
 
     vao.add_buffer(&vbo, &layout);
 
-    let texture = Texture::new("./assets/purpleNightFlower3.png");
-    texture.bind(0);
-    // println!("texture binding");
+    let texture1 = Texture::new("./assets/FlowerPattern2.png");
+
+    let texture2 = Texture::new("./assets/purpleNightFlower3.png");
+
     shader.bind();
-    shader.set_uniform_1i("u_texture", 0_i32);
-    // println!("Texture uniform fitting");
+    shader.set_uniform_1i("texture1", 0);
+    shader.set_uniform_1i("texture2", 1);
 
     vbo.unbind();
     vao.unbind();
     ib.unbind();
-    shader.unbind();
+    // shader.unbind();
 
     let renderer = Renderer {};
 
@@ -113,7 +114,7 @@ pub fn run() {
         gl_get_string(gl::SHADING_LANGUAGE_VERSION)
     );
 
-    let _start_time = std::time::Instant::now();
+    let start_time = std::time::Instant::now();
 
     while !window.should_close() {
         glfw.poll_events();
@@ -121,20 +122,27 @@ pub fn run() {
             glfw_handle_event(&mut window, event);
         }
 
-        clear_color(Color(0.3, 0.4, 0.6, 1.0));
+        clear_color(Color(0.1, 0.6, 0.1, 1.0));
 
-        
         shader.bind();
-        let (screen_width, screen_height) = window.get_framebuffer_size();
+        // let (screen_width, screen_height) = window.get_framebuffer_size();
 
-        let proj = nalgebra_glm::ortho(0.0, screen_width as f32, 0.0, screen_height as f32, -1.0, 1.0);
+        let proj = nalgebra_glm::identity();
+        let translate_proj = nalgebra_glm::translate(&proj, &nalgebra_glm::vec3(0.5f32, -0.5, 0.0));
+        let rotate_proj = nalgebra_glm::rotate(
+            &translate_proj,
+            start_time.elapsed().as_secs_f32(),
+            &nalgebra_glm::vec3(0.0f32, 0.0, 1.0),
+        );
 
         // shader.set_uniform_1f("u_aspect_ratio", screen_width as f32 / screen_height as f32);
         // shader.set_uniform_1f("u_time", start_time.elapsed().as_secs_f32());
-        shader.set_uniform_mat4f("u_MVP", &proj);
+        shader.set_uniform_mat4f("u_MVP", &rotate_proj);
+        texture1.bind(0);
+        texture2.bind(1);
         vao.bind();
         ib.bind();
-        
+
         renderer.clear();
         renderer.draw(&vao, &ib, &shader);
 

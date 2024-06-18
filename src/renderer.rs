@@ -1,8 +1,4 @@
-use super::{
-    vertex_array::VertexArray,
-    index_buffer::IndexBuffer,
-    shader::Shader
-};
+use super::{index_buffer::IndexBuffer, shader::Shader, vertex_array::VertexArray};
 
 pub struct Renderer {}
 
@@ -19,7 +15,12 @@ impl Renderer {
         index_buffer.bind();
 
         unsafe {
-            gl::DrawElements(gl::TRIANGLES, index_buffer.get_count(), gl::UNSIGNED_INT, 0 as *const _);
+            gl::DrawElements(
+                gl::TRIANGLES,
+                index_buffer.get_count(),
+                gl::UNSIGNED_INT,
+                0 as *const _,
+            );
         }
     }
 }

@@ -9,8 +9,8 @@ pub struct Texture<'a> {
     height: i32,
     #[allow(dead_code)]
     bpp: i32,
-    #[allow(dead_code)]
-    img: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
+    // #[allow(dead_code)]
+    // img: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
 }
 
 impl<'a> Texture<'a> {
@@ -38,7 +38,7 @@ impl<'a> Texture<'a> {
             gl::TexImage2D(
                 gl::TEXTURE_2D,
                 0,
-                gl::RGBA8 as i32,
+                gl::RGBA as i32,
                 width,
                 height,
                 0,
@@ -55,7 +55,7 @@ impl<'a> Texture<'a> {
             width,
             height,
             bpp,
-            img,
+            // img,
         };
     }
 
@@ -65,14 +65,14 @@ impl<'a> Texture<'a> {
             gl::BindTexture(gl::TEXTURE_2D, self.renderer_id);
         }
     }
-    
+
     #[allow(dead_code)]
     pub fn undbind(&self) {
         unsafe {
             gl::BindTexture(gl::TEXTURE_2D, 0);
         }
     }
-    
+
     #[allow(dead_code)]
     pub fn get_width(&self) -> i32 {
         self.width

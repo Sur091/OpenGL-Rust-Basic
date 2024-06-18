@@ -62,7 +62,12 @@ impl<'a> Shader<'a> {
 
     pub fn set_uniform_mat4f(&mut self, name: &str, proj: &nalgebra_glm::Mat4) {
         unsafe {
-            gl::UniformMatrix4fv(self.get_uniform_location(name), 1, gl::FALSE, proj.as_ptr().cast())
+            gl::UniformMatrix4fv(
+                self.get_uniform_location(name),
+                1,
+                gl::FALSE,
+                proj.as_ptr().cast(),
+            )
         }
     }
 
@@ -85,16 +90,11 @@ impl<'a> Shader<'a> {
             let mut success = 0;
             gl::GetProgramiv(program, gl::LINK_STATUS, &mut success);
             if success == 0 {
-              let mut v: Vec<u8> = Vec::with_capacity(1024);
-              let mut log_len = 0_i32;
-              gl::GetProgramInfoLog(
-                program,
-                1024,
-                &mut log_len,
-                v.as_mut_ptr().cast(),
-              );
-              v.set_len(log_len.try_into().unwrap());
-              panic!("Program Link Error: {}", String::from_utf8_lossy(&v));
+                let mut v: Vec<u8> = Vec::with_capacity(1024);
+                let mut log_len = 0_i32;
+                gl::GetProgramInfoLog(program, 1024, &mut log_len, v.as_mut_ptr().cast());
+                v.set_len(log_len.try_into().unwrap());
+                panic!("Program Link Error: {}", String::from_utf8_lossy(&v));
             }
             gl::ValidateProgram(program);
 
