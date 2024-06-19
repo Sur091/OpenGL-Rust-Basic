@@ -35,7 +35,7 @@ void main()
     vec4 tex_color1 = texture(texture1, vertex_texture_coord);
     vec4 tex_color2 = texture(texture2, vertex_texture_coord);
 
-    color = mix(tex_color1, tex_color2, 0.8);
+    color = mix(tex_color1, tex_color2, 1.0);
 }
 
 // float polygon(vec2 loc, vec2 center, int sides, float raidus, float theta) {

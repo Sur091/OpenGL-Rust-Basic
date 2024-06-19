@@ -1,3 +1,5 @@
+use nalgebra_glm as glm;
+
 struct ShaderProgramSource {
     vertex_source: String,
     fragment_source: String,
@@ -60,13 +62,13 @@ impl<'a> Shader<'a> {
         }
     }
 
-    pub fn set_uniform_mat4f(&mut self, name: &str, proj: &nalgebra_glm::Mat4) {
+    pub fn set_uniform_mat4f(&mut self, name: &str, proj: &glm::Mat4) {
         unsafe {
             gl::UniformMatrix4fv(
                 self.get_uniform_location(name),
                 1,
                 gl::FALSE,
-                proj.as_ptr().cast(),
+                glm::value_ptr(&proj).as_ptr().cast(),
             )
         }
     }

@@ -1,5 +1,7 @@
 use glfw::Context;
+use nalgebra_glm as glm;
 
+mod camera;
 mod index_buffer;
 mod renderer;
 mod shader;
@@ -27,7 +29,7 @@ pub fn run() {
         glfw::OpenGlProfileHint::Core,
     ));
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
-    glfw.window_hint(glfw::WindowHint::Resizable(false));
+    glfw.window_hint(glfw::WindowHint::Resizable(true));
 
     let (mut window, events) = glfw
         .create_window(WIDTH, HEIGHT, TITLE, glfw::WindowMode::Windowed)
@@ -40,13 +42,14 @@ pub fn run() {
     window.set_key_polling(true);
     gl::load_with(|ptr| window.get_proc_address(ptr) as *const _);
 
-    unsafe {
-        gl::Viewport(0, 0, WIDTH as i32, HEIGHT as i32);
-    }
+    // unsafe {
+    //     gl::Viewport(0, 0, WIDTH as i32, HEIGHT as i32);
+    // }
 
     // Set up for basic texture
     unsafe {
         gl::Enable(gl::BLEND);
+        gl::Enable(gl::DEPTH_TEST);
         gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
     }
 
@@ -59,7 +62,6 @@ pub fn run() {
 
     unsafe {
         gl::Viewport(0, 0, screen_width, screen_height);
-        clear_color(Color(0.4, 0.4, 0.4, 1.0));
     }
     // -------------------------------------------
 
@@ -70,11 +72,49 @@ pub fn run() {
     let mut shader = Shader::new(VERT_SHADER_PATH, FRAG_SHADER_PATH);
 
     // const SIZE: f32 = 0.5;
-    const VERTICES: [f32; 16] = [
-        -0.2, -0.4, 0.0, 0.0,
-         0.2, -0.4, 2.0, 0.0,
-         0.2,  0.4, 2.0, 2.0,
-        -0.2,  0.4, 0.0, 2.0,
+    #[rustfmt::skip]
+    const VERTICES: [f32; 36*5] = [
+        -0.5, -0.5, -0.5,  0.0, 0.0,
+         0.5, -0.5, -0.5,  1.0, 0.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+        -0.5,  0.5, -0.5,  0.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0, 0.0,
+    
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+         0.5, -0.5,  0.5,  1.0, 0.0,
+         0.5,  0.5,  0.5,  1.0, 1.0,
+         0.5,  0.5,  0.5,  1.0, 1.0,
+        -0.5,  0.5,  0.5,  0.0, 1.0,
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+    
+        -0.5,  0.5,  0.5,  1.0, 0.0,
+        -0.5,  0.5, -0.5,  1.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+        -0.5,  0.5,  0.5,  1.0, 0.0,
+    
+         0.5,  0.5,  0.5,  1.0, 0.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+         0.5, -0.5, -0.5,  0.0, 1.0,
+         0.5, -0.5, -0.5,  0.0, 1.0,
+         0.5, -0.5,  0.5,  0.0, 0.0,
+         0.5,  0.5,  0.5,  1.0, 0.0,
+    
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+         0.5, -0.5, -0.5,  1.0, 1.0,
+         0.5, -0.5,  0.5,  1.0, 0.0,
+         0.5, -0.5,  0.5,  1.0, 0.0,
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+    
+        -0.5,  0.5, -0.5,  0.0, 1.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+         0.5,  0.5,  0.5,  1.0, 0.0,
+         0.5,  0.5,  0.5,  1.0, 0.0,
+        -0.5,  0.5,  0.5,  0.0, 0.0,
+        -0.5,  0.5, -0.5,  0.0, 1.0,
     ];
 
     const INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
@@ -86,7 +126,7 @@ pub fn run() {
     let ib = IndexBuffer::new(&INDICES);
 
     let mut layout = VertexBufferLayout::new();
-    layout.push_f32(2);
+    layout.push_f32(3);
     layout.push_f32(2);
     // layout.push_f32(3);
 
@@ -94,7 +134,7 @@ pub fn run() {
 
     let texture1 = Texture::new("./assets/FlowerPattern2.png");
 
-    let texture2 = Texture::new("./assets/purpleNightFlower3.png");
+    let texture2 = Texture::new("./assets/BlueFlowers.jpg");
 
     shader.bind();
     shader.set_uniform_1i("texture1", 0);
@@ -122,41 +162,51 @@ pub fn run() {
             glfw_handle_event(&mut window, event);
         }
 
-        clear_color(Color(0.1, 0.6, 0.1, 1.0));
+        renderer.clear_color(renderer::Color(0.6, 0.5, 0.1, 1.0));
 
-        shader.bind();
-        // let (screen_width, screen_height) = window.get_framebuffer_size();
+        let (screen_width, screen_height) = window.get_framebuffer_size();
 
-        let proj = nalgebra_glm::identity();
-        let translate_proj = nalgebra_glm::translate(&proj, &nalgebra_glm::vec3(0.5f32, -0.5, 0.0));
-        let rotate_proj = nalgebra_glm::rotate(
-            &translate_proj,
-            start_time.elapsed().as_secs_f32(),
-            &nalgebra_glm::vec3(0.0f32, 0.0, 1.0),
+        let model = glm::identity();
+        // let translate_proj = glm::translate(&proj, &glm::vec3(, -0.5, 0.0));
+        let model = glm::rotate(
+            &model,
+            -55.0 * glm::pi::<f32>() / 180.0 * start_time.elapsed().as_secs_f32(),
+            &glm::vec3(0.5, 1.0, 0.0),
+        );
+
+        let view = glm::identity();
+        let view = glm::translate(&view, &glm::vec3(0.0, 0.0, -6.0));
+
+        let projection = glm::perspective(
+            glm::quarter_pi::<f32>(),
+            screen_width as f32 / screen_height as f32,
+            000.1,
+            100.0,
         );
 
         // shader.set_uniform_1f("u_aspect_ratio", screen_width as f32 / screen_height as f32);
         // shader.set_uniform_1f("u_time", start_time.elapsed().as_secs_f32());
-        shader.set_uniform_mat4f("u_MVP", &rotate_proj);
+        // let identity = glm::identity();
+        shader.bind();
+        shader.set_uniform_mat4f("u_model", &model);
+        shader.set_uniform_mat4f("u_view", &view);
+        shader.set_uniform_mat4f("u_projection", &projection);
         texture1.bind(0);
         texture2.bind(1);
         vao.bind();
         ib.bind();
 
         renderer.clear();
-        renderer.draw(&vao, &ib, &shader);
+        // renderer.draw(&vao, &ib, &shader);
+        unsafe {
+            gl::DrawArrays(gl::TRIANGLES, 0, 36);
+        }
 
         vao.unbind();
         ib.unbind();
 
         window.swap_buffers();
     }
-}
-
-pub struct Color(f32, f32, f32, f32);
-
-pub fn clear_color(c: Color) {
-    unsafe { gl::ClearColor(c.0, c.1, c.2, c.3) }
 }
 
 pub fn gl_get_string<'a>(name: gl::types::GLenum) -> &'a str {
