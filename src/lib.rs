@@ -9,6 +9,7 @@ mod texture;
 mod vertex_array;
 mod vertex_buffer;
 
+use camera::Camera;
 use index_buffer::IndexBuffer;
 use renderer::Renderer;
 use shader::Shader;
@@ -16,6 +17,7 @@ use texture::Texture;
 use vertex_array::vertex_buffer_layout::VertexBufferLayout;
 use vertex_array::VertexArray;
 use vertex_buffer::VertexBuffer;
+use camera::CameraMovement;
 
 const TITLE: &str = "My First GLFW window";
 const WIDTH: u32 = 800;
@@ -154,15 +156,38 @@ pub fn run() {
         gl_get_string(gl::SHADING_LANGUAGE_VERSION)
     );
 
+    let mut camera = Camera::default();
+
+    let mut first_mouse = true;
+    let mut last_x = screen_width as f32 / 2.0;
+    let mut last_y = screen_height as f32 / 2.0;
+
     let start_time = std::time::Instant::now();
+    let mut last_frame = std::time::Instant::now();
+    let mut delta_time = 0.0;
+
 
     while !window.should_close() {
+
+        delta_time = last_frame.elapsed().as_secs_f32();
+        last_frame = std::time::Instant::now();
+
+
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
-            glfw_handle_event(&mut window, event);
+            glfw_handle_event(&mut window, event, &mut camera, delta_time);
         }
 
+        let (x, y) = window.get_cursor_pos();
+        process_mouse_movements(x as f32, y as f32, &mut camera, &mut last_x, &mut last_y, &mut first_mouse);
+
         renderer.clear_color(renderer::Color(0.6, 0.5, 0.1, 1.0));
+
+        // let time = start_time.elapsed().as_secs_f32();
+        // let radius: f32 = 10.0;
+        // let (cam_x, cam_z) = (radius * time.sin(), radius * time.cos());
+        // let camera_position = glm::vec3(cam_x, 0.0, cam_z);
+        // camera.change_position(&camera_position);
 
         let (screen_width, screen_height) = window.get_framebuffer_size();
 
@@ -174,8 +199,9 @@ pub fn run() {
             &glm::vec3(0.5, 1.0, 0.0),
         );
 
-        let view = glm::identity();
-        let view = glm::translate(&view, &glm::vec3(0.0, 0.0, -6.0));
+        let view = camera.get_view_matrix();
+        // let view = glm::identity();
+        // let view = glm::translate(&view, &glm::vec3(0.0, 0.0, -1.0));
 
         let projection = glm::perspective(
             glm::quarter_pi::<f32>(),
@@ -215,15 +241,45 @@ pub fn gl_get_string<'a>(name: gl::types::GLenum) -> &'a str {
     v.to_str().unwrap()
 }
 
-fn glfw_handle_event(window: &mut glfw::Window, event: glfw::WindowEvent) {
+fn process_mouse_movements(x: f32, y: f32, camera: &mut Camera, last_x: &mut f32, last_y: &mut f32, first_mouse: &mut bool) {
+
+    if *first_mouse {
+        *last_x = x;
+        *last_y = y;
+        *first_mouse = false;
+    }
+    let x_offset = x - *last_x;
+    let y_offset = *last_y - y;
+
+    *last_x = x;
+    *last_y = y;
+
+    camera.process_mouse_movements(x_offset, y_offset);
+}
+
+fn glfw_handle_event(window: &mut glfw::Window, event: glfw::WindowEvent, camera: &mut Camera, delta_time: f32) {
     use glfw::Action;
     use glfw::Key;
     use glfw::WindowEvent as Event;
+
 
     match event {
         Event::Key(Key::Escape, _, Action::Press, _) => {
             window.set_should_close(true);
         }
+        Event::Key(Key::W, _, Action::Repeat | Action::Press, _) => {
+            camera.process_keyboard(CameraMovement::FORWARD, delta_time)
+        }
+        Event::Key(Key::A, _, Action::Repeat | Action::Press, _) => {
+            camera.process_keyboard(CameraMovement::LEFT, delta_time)
+        }
+        Event::Key(Key::S, _, Action::Repeat | Action::Press, _) => {
+            camera.process_keyboard(CameraMovement::BACKWARD, delta_time)
+        }
+        Event::Key(Key::D, _, Action::Repeat | Action::Press, _) => {
+            camera.process_keyboard(CameraMovement::RIGHT, delta_time)
+        }
+        // Event::MouseButton(, , )
         _ => {}
     }
 }
