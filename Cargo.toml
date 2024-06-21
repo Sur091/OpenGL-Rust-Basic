@@ -6,10 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bytemuck = "1"
 env_logger = "0.11"
 log = "0.4"
 gl = "0.14"
-glfw = "0.57"
 image = "0.25"
 nalgebra-glm = "0.18"
+glutin = "0.32"
+winit = "0.30"
+glutin-winit = "0.5.0"

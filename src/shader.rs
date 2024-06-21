@@ -5,24 +5,22 @@ struct ShaderProgramSource {
     fragment_source: String,
 }
 
-pub struct Shader<'a> {
-    #[allow(dead_code)]
-    vertex_file_path: &'a str,
+pub struct Shader {
+    _vertex_file_path: String,
 
-    #[allow(dead_code)]
-    fragment_file_path: &'a str,
+    _fragment_file_path: String,
 
     renderer_id: u32,
     uniform_location_cache: std::collections::HashMap<String, i32>,
 }
 
-impl<'a> Shader<'a> {
-    pub fn new(vertex_file_path: &'a str, fragment_file_path: &'a str) -> Shader<'a> {
+impl Shader {
+    pub fn new(vertex_file_path: &str, fragment_file_path: &str) -> Shader {
         let source: ShaderProgramSource =
             Self::parse_shader(&vertex_file_path, &fragment_file_path);
         Self {
-            vertex_file_path,
-            fragment_file_path,
+            _vertex_file_path: vertex_file_path.to_string(),
+            _fragment_file_path: fragment_file_path.to_string(),
             renderer_id: Self::create_shader(&source.vertex_source, &source.fragment_source),
             uniform_location_cache: Default::default(),
         }
@@ -168,7 +166,7 @@ impl<'a> Shader<'a> {
     }
 }
 
-impl<'a> Drop for Shader<'a> {
+impl Drop for Shader {
     fn drop(&mut self) {
         unsafe {
             gl::DeleteProgram(self.renderer_id);

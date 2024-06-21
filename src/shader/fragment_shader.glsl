@@ -8,8 +8,8 @@ layout(location=0) out vec4 color;
 
 // uniform float u_aspect_ratio;
 // uniform float u_time;
+uniform sampler2D texture0;
 uniform sampler2D texture1;
-uniform sampler2D texture2;
 
 // float polygon(vec2 loc, vec2 center, int sides, float raidus, float theta);
 // float circle(vec2 loc, vec2 center, float radius);
@@ -32,8 +32,8 @@ void main()
     // float g = uv.y;
     // float b = 0.0;
 
-    vec4 tex_color1 = texture(texture1, vertex_texture_coord);
-    vec4 tex_color2 = texture(texture2, vertex_texture_coord);
+    vec4 tex_color1 = texture(texture0, vertex_texture_coord);
+    vec4 tex_color2 = texture(texture1, vertex_texture_coord);
 
     color = mix(tex_color1, tex_color2, 0.99);
 }

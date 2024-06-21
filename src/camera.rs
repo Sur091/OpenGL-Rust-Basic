@@ -30,7 +30,6 @@ impl Camera {
     const MOUSE_SENSITIVITY: f32 = 0.1;
     const ZOOM: f32 = 45.0;
 
-
     pub fn get_view_matrix(&self) -> glm::Mat4 {
         glm::look_at(&self.position, &(self.position + self.front), &self.up)
     }
@@ -64,7 +63,7 @@ impl Camera {
 
     pub fn process_keyboard(&mut self, direction: CameraMovement, delta_time: f32) {
         let velocity = self.movement_speed * delta_time;
-        
+
         match direction {
             CameraMovement::FORWARD => self.position += self.front * velocity,
             CameraMovement::BACKWARD => self.position -= self.front * velocity,
@@ -101,7 +100,6 @@ impl Camera {
 }
 
 impl Default for Camera {
-
     fn default() -> Self {
         let position = glm::vec3(0.0, 0.0, 0.0);
         let world_up = glm::vec3(0.0, 1.0, 0.0);

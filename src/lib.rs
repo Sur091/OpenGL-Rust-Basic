@@ -1,5 +1,4 @@
-use glfw::Context;
-use nalgebra_glm as glm;
+use glutin::config::ConfigTemplateBuilder;
 
 mod camera;
 mod index_buffer;
@@ -10,239 +9,334 @@ mod vertex_array;
 mod vertex_buffer;
 
 use camera::Camera;
-use index_buffer::IndexBuffer;
-use renderer::Renderer;
-use shader::Shader;
-use texture::Texture;
-use vertex_array::vertex_buffer_layout::VertexBufferLayout;
-use vertex_array::VertexArray;
-use vertex_buffer::VertexBuffer;
 use camera::CameraMovement;
+use renderer::Renderer;
 
 const TITLE: &str = "My First GLFW window";
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 800;
 
-pub fn run() {
-    use glfw::fail_on_errors;
-    let mut glfw = glfw::init(fail_on_errors!()).unwrap();
-    glfw.window_hint(glfw::WindowHint::ContextVersion(4, 5));
-    glfw.window_hint(glfw::WindowHint::OpenGlProfile(
-        glfw::OpenGlProfileHint::Core,
-    ));
-    glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
-    glfw.window_hint(glfw::WindowHint::Resizable(true));
+struct App {
+    template: ConfigTemplateBuilder,
+    display_builder: glutin_winit::DisplayBuilder,
+    exit_state: Result<(), Box<dyn std::error::Error>>,
+    not_current_gl_context: Option<glutin::context::NotCurrentContext>,
+    renderer: Option<Renderer>,
+    // NOTE: `AppState` carries the `Window`, thus it should be dropped after everything else.
+    state: Option<AppState>,
+}
 
-    let (mut window, events) = glfw
-        .create_window(WIDTH, HEIGHT, TITLE, glfw::WindowMode::Windowed)
-        .unwrap();
-    let (screen_width, screen_height) = window.get_framebuffer_size();
+struct AppState {
+    gl_context: glutin::context::PossiblyCurrentContext,
+    gl_surface: glutin::surface::Surface<glutin::surface::WindowSurface>,
+    // NOTE: Window should be dropped after all resources created using its
+    // raw-window-handle.
+    window: winit::window::Window,
+}
 
-    window.set_framebuffer_size_callback(|_window, x, y| unsafe { gl::Viewport(0, 0, x, y) });
+impl App {
+    fn new(template: ConfigTemplateBuilder, display_builder: glutin_winit::DisplayBuilder) -> Self {
+        Self {
+            template,
+            display_builder,
+            exit_state: Ok(()),
+            not_current_gl_context: None,
+            state: None,
+            renderer: None,
+        }
+    }
+}
 
-    window.make_current();
-    window.set_key_polling(true);
-    gl::load_with(|ptr| window.get_proc_address(ptr) as *const _);
+pub fn gl_config_picker(
+    configs: Box<dyn Iterator<Item = glutin::config::Config> + '_>,
+) -> glutin::config::Config {
+    use glutin::config::GlConfig;
+    configs
+        .reduce(|accum, config| {
+            let transparency_check = config.supports_transparency().unwrap_or(false)
+                & !accum.supports_transparency().unwrap_or(false);
+
+            if transparency_check || config.num_samples() > accum.num_samples() {
+                config
+            } else {
+                accum
+            }
+        })
+        .unwrap()
+}
+
+impl winit::application::ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        use glutin::config::GlConfig;
+        use glutin::context::NotCurrentGlContext;
+        use glutin::display::GetGlDisplay;
+        use glutin::display::GlDisplay;
+        use glutin::prelude::GlSurface;
+        use glutin_winit::GlWindow;
+        use winit::raw_window_handle::HasWindowHandle;
+
+        let (mut window, gl_config) = match self.display_builder.clone().build(
+            event_loop,
+            self.template.clone(),
+            gl_config_picker,
+        ) {
+            Ok(ok) => ok,
+            Err(e) => {
+                self.exit_state = Err(e);
+                event_loop.exit();
+                return;
+            }
+        };
+        println!("Picked a config with {} samples", gl_config.num_samples());
+
+        let raw_window_handle = window
+            .as_ref()
+            .and_then(|window| window.window_handle().ok())
+            .map(|handle| handle.as_raw());
+
+        // XXX The display could be obtained from any object created by it, so we can
+        // query it from the config.
+        let gl_display = gl_config.display();
+
+        // The context creation part.
+        let context_attributes =
+            glutin::context::ContextAttributesBuilder::new().build(raw_window_handle);
+
+        // Since glutin by default tries to create OpenGL core context, which may not be
+        // present we should try gles.
+        let fallback_context_attributes = glutin::context::ContextAttributesBuilder::new()
+            .with_context_api(glutin::context::ContextApi::Gles(None))
+            .build(raw_window_handle);
+
+        // There are also some old devices that support neither modern OpenGL nor GLES.
+        // To support these we can try and create a 2.1 context.
+        let legacy_context_attributes = glutin::context::ContextAttributesBuilder::new()
+            .with_context_api(glutin::context::ContextApi::OpenGl(Some(
+                glutin::context::Version::new(2, 1),
+            )))
+            .build(raw_window_handle);
+
+        self.not_current_gl_context.replace(unsafe {
+            gl_display
+                .create_context(&gl_config, &context_attributes)
+                .unwrap_or_else(|_| {
+                    gl_display
+                        .create_context(&gl_config, &fallback_context_attributes)
+                        .unwrap_or_else(|_| {
+                            gl_display
+                                .create_context(&gl_config, &legacy_context_attributes)
+                                .expect("failed to create context")
+                        })
+                })
+        });
+
+        #[cfg(android_platform)]
+        println!("Android window available");
+
+        let window = window.take().unwrap_or_else(|| {
+            let window_attributes = winit::window::Window::default_attributes()
+                .with_transparent(true)
+                .with_title("Glutin triangle gradient example (press Escape to exit)");
+            glutin_winit::finalize_window(event_loop, window_attributes, &gl_config).unwrap()
+        });
+
+        let attrs = window
+            .build_surface_attributes(Default::default())
+            .expect("Failed to build surface attributes");
+        let gl_surface = unsafe {
+            gl_config
+                .display()
+                .create_window_surface(&gl_config, &attrs)
+                .unwrap()
+        };
+
+        // Make it current.
+        let gl_context = self
+            .not_current_gl_context
+            .take()
+            .unwrap()
+            .make_current(&gl_surface)
+            .unwrap();
+
+        // The context needs to be current for the Renderer to set up shaders and
+        // buffers. It also performs function loading, which needs a current context on
+        // WGL.
+        self.renderer
+            .get_or_insert_with(|| Renderer::new(&gl_display));
+
+        // Try setting vsync.
+        if let Err(res) = gl_surface.set_swap_interval(
+            &gl_context,
+            glutin::surface::SwapInterval::Wait(std::num::NonZeroU32::new(1).unwrap()),
+        ) {
+            eprintln!("Error setting vsync: {res:?}");
+        }
+
+        assert!(self
+            .state
+            .replace(AppState {
+                gl_context,
+                gl_surface,
+                window
+            })
+            .is_none());
+    }
+
+    fn suspended(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        use glutin::context::PossiblyCurrentGlContext;
+        // This event is only raised on Android, where the backing NativeWindow for a GL
+        // Surface can appear and disappear at any moment.
+        println!("Android window removed");
+
+        // Destroy the GL Surface and un-current the GL Context before ndk-glue releases
+        // the window back to the system.
+        let gl_context = self.state.take().unwrap().gl_context;
+        assert!(self
+            .not_current_gl_context
+            .replace(gl_context.make_not_current().unwrap())
+            .is_none());
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: winit::event::WindowEvent,
+    ) {
+        use glutin::prelude::GlSurface;
+        match event {
+            winit::event::WindowEvent::Resized(size) if size.width != 0 && size.height != 0 => {
+                // Some platforms like EGL require resizing GL surface to update the size
+                // Notable platforms here are Wayland and macOS, other don't require it
+                // and the function is no-op, but it's wise to resize it for portability
+                // reasons.
+                if let Some(AppState {
+                    gl_context,
+                    gl_surface,
+                    window: _,
+                }) = self.state.as_ref()
+                {
+                    gl_surface.resize(
+                        gl_context,
+                        std::num::NonZeroU32::new(size.width).unwrap(),
+                        std::num::NonZeroU32::new(size.height).unwrap(),
+                    );
+                    let renderer = self.renderer.as_ref().unwrap();
+                    renderer.resize(size.width as i32, size.height as i32);
+                }
+            }
+            winit::event::WindowEvent::CloseRequested
+            | winit::event::WindowEvent::KeyboardInput {
+                event:
+                    winit::event::KeyEvent {
+                        logical_key: winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape),
+                        ..
+                    },
+                ..
+            } => event_loop.exit(),
+            _ => (),
+        }
+    }
+    fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+        use glutin::prelude::GlSurface;
+
+        if let Some(AppState {
+            gl_context,
+            gl_surface,
+            window,
+        }) = self.state.as_ref()
+        {
+            let renderer = self.renderer.as_mut().unwrap();
+            // renderer.draw();
+            renderer.draw_array();
+            window.request_redraw();
+
+            gl_surface.swap_buffers(gl_context).unwrap();
+        }
+    }
+}
+
+pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let size = winit::dpi::PhysicalSize::new(WIDTH, HEIGHT);
+    let window_attributes = winit::window::Window::default_attributes()
+        .with_transparent(true)
+        .with_title(TITLE)
+        .with_inner_size(size);
+    let template = glutin::config::ConfigTemplateBuilder::new()
+        .with_alpha_size(8)
+        .with_transparency(cfg!(cgl_backend));
+    let display_builder =
+        glutin_winit::DisplayBuilder::new().with_window_attributes(Some(window_attributes));
+
+    let mut app = App::new(template, display_builder);
+    let event_loop = winit::event_loop::EventLoop::new().unwrap();
+    event_loop.run_app(&mut app)?;
 
     // unsafe {
-    //     gl::Viewport(0, 0, WIDTH as i32, HEIGHT as i32);
+    //     gl::Viewport(0, 0, screen_width, screen_height);
     // }
-
-    // Set up for basic texture
-    unsafe {
-        gl::Enable(gl::BLEND);
-        gl::Enable(gl::DEPTH_TEST);
-        gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-    }
-
-    // Enable error handling
-    #[cfg(debug_assertions)]
-    unsafe {
-        gl::Enable(gl::DEBUG_OUTPUT);
-        gl::DebugMessageCallback(Some(message_callback), std::ptr::null());
-    }
-
-    unsafe {
-        gl::Viewport(0, 0, screen_width, screen_height);
-    }
     // -------------------------------------------
 
-    const VERT_SHADER_PATH: &str = "./src/shader/vertex_shader.glsl";
-
-    const FRAG_SHADER_PATH: &str = "./src/shader/fragment_shader.glsl";
-
-    let mut shader = Shader::new(VERT_SHADER_PATH, FRAG_SHADER_PATH);
-
-    // const SIZE: f32 = 0.5;
-    #[rustfmt::skip]
-    const VERTICES: [f32; 36*5] = [
-        -0.5, -0.5, -0.5,  0.0, 0.0,
-         0.5, -0.5, -0.5,  1.0, 0.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-        -0.5,  0.5, -0.5,  0.0, 1.0,
-        -0.5, -0.5, -0.5,  0.0, 0.0,
-    
-        -0.5, -0.5,  0.5,  0.0, 0.0,
-         0.5, -0.5,  0.5,  1.0, 0.0,
-         0.5,  0.5,  0.5,  1.0, 1.0,
-         0.5,  0.5,  0.5,  1.0, 1.0,
-        -0.5,  0.5,  0.5,  0.0, 1.0,
-        -0.5, -0.5,  0.5,  0.0, 0.0,
-    
-        -0.5,  0.5,  0.5,  1.0, 0.0,
-        -0.5,  0.5, -0.5,  1.0, 1.0,
-        -0.5, -0.5, -0.5,  0.0, 1.0,
-        -0.5, -0.5, -0.5,  0.0, 1.0,
-        -0.5, -0.5,  0.5,  0.0, 0.0,
-        -0.5,  0.5,  0.5,  1.0, 0.0,
-    
-         0.5,  0.5,  0.5,  1.0, 0.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-         0.5, -0.5, -0.5,  0.0, 1.0,
-         0.5, -0.5, -0.5,  0.0, 1.0,
-         0.5, -0.5,  0.5,  0.0, 0.0,
-         0.5,  0.5,  0.5,  1.0, 0.0,
-    
-        -0.5, -0.5, -0.5,  0.0, 1.0,
-         0.5, -0.5, -0.5,  1.0, 1.0,
-         0.5, -0.5,  0.5,  1.0, 0.0,
-         0.5, -0.5,  0.5,  1.0, 0.0,
-        -0.5, -0.5,  0.5,  0.0, 0.0,
-        -0.5, -0.5, -0.5,  0.0, 1.0,
-    
-        -0.5,  0.5, -0.5,  0.0, 1.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-         0.5,  0.5,  0.5,  1.0, 0.0,
-         0.5,  0.5,  0.5,  1.0, 0.0,
-        -0.5,  0.5,  0.5,  0.0, 0.0,
-        -0.5,  0.5, -0.5,  0.0, 1.0,
-    ];
-
-    const INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
-
-    let vao = VertexArray::new();
-
-    let vbo = VertexBuffer::new(&VERTICES);
-
-    let ib = IndexBuffer::new(&INDICES);
-
-    let mut layout = VertexBufferLayout::new();
-    layout.push_f32(3);
-    layout.push_f32(2);
-    // layout.push_f32(3);
-
-    vao.add_buffer(&vbo, &layout);
-
-    let texture1 = Texture::new("./assets/FlowerPattern2.png");
-
-    let texture2 = Texture::new("./assets/BlueFlowers.jpg");
-
-    shader.bind();
-    shader.set_uniform_1i("texture1", 0);
-    shader.set_uniform_1i("texture2", 1);
-
-    vbo.unbind();
-    vao.unbind();
-    ib.unbind();
     // shader.unbind();
 
-    let renderer = Renderer {};
+    // let mut first_mouse = true;
+    // let mut last_x = screen_width as f32 / 2.0;
+    // let mut last_y = screen_height as f32 / 2.0;
 
-    // -------------------------------------------
-    println!("OpenGL version: {}", gl_get_string(gl::VERSION));
-    println!(
-        "GLSL version: {}",
-        gl_get_string(gl::SHADING_LANGUAGE_VERSION)
-    );
+    // let start_time = std::time::Instant::now();
+    // let mut last_frame = std::time::Instant::now();
+    // let mut delta_time = 0.0;
 
-    let mut camera = Camera::default();
+    // while !window.should_close() {
+    //     delta_time = last_frame.elapsed().as_secs_f32();
+    //     last_frame = std::time::Instant::now();
 
-    let mut first_mouse = true;
-    let mut last_x = screen_width as f32 / 2.0;
-    let mut last_y = screen_height as f32 / 2.0;
+    //     glfw.poll_events();
+    //     for (_, event) in glfw::flush_messages(&events) {
+    //         glfw_handle_event(&mut window, event, &mut camera, delta_time);
+    //     }
 
-    let start_time = std::time::Instant::now();
-    let mut last_frame = std::time::Instant::now();
-    let mut delta_time = 0.0;
+    //     let (x, y) = window.get_cursor_pos();
+    //     process_mouse_movements(
+    //         x as f32,
+    //         y as f32,
+    //         &mut camera,
+    //         &mut last_x,
+    //         &mut last_y,
+    //         &mut first_mouse,
+    //     );
 
+    // let time = start_time.elapsed().as_secs_f32();
+    // let radius: f32 = 10.0;
+    // let (cam_x, cam_z) = (radius * time.sin(), radius * time.cos());
+    // let camera_position = glm::vec3(cam_x, 0.0, cam_z);
+    // camera.change_position(&camera_position);
 
-    while !window.should_close() {
+    // let (screen_width, screen_height) = window.get_framebuffer_size();
 
-        delta_time = last_frame.elapsed().as_secs_f32();
-        last_frame = std::time::Instant::now();
+    // let translate_proj = glm::translate(&proj, &glm::vec3(, -0.5, 0.0));
 
+    // let view = glm::identity();
+    // let view = glm::translate(&view, &glm::vec3(0.0, 0.0, -1.0));
 
-        glfw.poll_events();
-        for (_, event) in glfw::flush_messages(&events) {
-            glfw_handle_event(&mut window, event, &mut camera, delta_time);
-        }
+    // shader.set_uniform_1f("u_aspect_ratio", screen_width as f32 / screen_height as f32);
+    // shader.set_uniform_1f("u_time", start_time.elapsed().as_secs_f32());
+    // let identity = glm::identity();
 
-        let (x, y) = window.get_cursor_pos();
-        process_mouse_movements(x as f32, y as f32, &mut camera, &mut last_x, &mut last_y, &mut first_mouse);
+    // renderer.draw(&
+    // }
 
-        renderer.clear_color(renderer::Color(0.6, 0.5, 0.1, 1.0));
-
-        // let time = start_time.elapsed().as_secs_f32();
-        // let radius: f32 = 10.0;
-        // let (cam_x, cam_z) = (radius * time.sin(), radius * time.cos());
-        // let camera_position = glm::vec3(cam_x, 0.0, cam_z);
-        // camera.change_position(&camera_position);
-
-        let (screen_width, screen_height) = window.get_framebuffer_size();
-
-        let model = glm::identity();
-        // let translate_proj = glm::translate(&proj, &glm::vec3(, -0.5, 0.0));
-        let model = glm::rotate(
-            &model,
-            -55.0 * glm::pi::<f32>() / 180.0 * start_time.elapsed().as_secs_f32(),
-            &glm::vec3(0.5, 1.0, 0.0),
-        );
-
-        let view = camera.get_view_matrix();
-        // let view = glm::identity();
-        // let view = glm::translate(&view, &glm::vec3(0.0, 0.0, -1.0));
-
-        let projection = glm::perspective(
-            glm::quarter_pi::<f32>(),
-            screen_width as f32 / screen_height as f32,
-            000.1,
-            100.0,
-        );
-
-        // shader.set_uniform_1f("u_aspect_ratio", screen_width as f32 / screen_height as f32);
-        // shader.set_uniform_1f("u_time", start_time.elapsed().as_secs_f32());
-        // let identity = glm::identity();
-        shader.bind();
-        shader.set_uniform_mat4f("u_model", &model);
-        shader.set_uniform_mat4f("u_view", &view);
-        shader.set_uniform_mat4f("u_projection", &projection);
-        texture1.bind(0);
-        texture2.bind(1);
-        vao.bind();
-        ib.bind();
-
-        renderer.clear();
-        // renderer.draw(&vao, &ib, &shader);
-        unsafe {
-            gl::DrawArrays(gl::TRIANGLES, 0, 36);
-        }
-
-        vao.unbind();
-        ib.unbind();
-
-        window.swap_buffers();
-    }
+    Ok(())
 }
 
-pub fn gl_get_string<'a>(name: gl::types::GLenum) -> &'a str {
-    let v = unsafe { gl::GetString(name) };
-    let v: &std::ffi::CStr = unsafe { std::ffi::CStr::from_ptr(v as *const i8) };
-    v.to_str().unwrap()
-}
-
-fn process_mouse_movements(x: f32, y: f32, camera: &mut Camera, last_x: &mut f32, last_y: &mut f32, first_mouse: &mut bool) {
-
+fn process_mouse_movements(
+    x: f32,
+    y: f32,
+    camera: &mut Camera,
+    last_x: &mut f32,
+    last_y: &mut f32,
+    first_mouse: &mut bool,
+) {
     if *first_mouse {
         *last_x = x;
         *last_y = y;
@@ -257,78 +351,33 @@ fn process_mouse_movements(x: f32, y: f32, camera: &mut Camera, last_x: &mut f32
     camera.process_mouse_movements(x_offset, y_offset);
 }
 
-fn glfw_handle_event(window: &mut glfw::Window, event: glfw::WindowEvent, camera: &mut Camera, delta_time: f32) {
-    use glfw::Action;
-    use glfw::Key;
-    use glfw::WindowEvent as Event;
+// fn glfw_handle_event(
+//     window: &mut glfw::Window,
+//     event: glfw::WindowEvent,
+//     camera: &mut Camera,
+//     delta_time: f32,
+// ) {
+//     use glfw::Action;
+//     use glfw::Key;
+//     use glfw::WindowEvent as Event;
 
-
-    match event {
-        Event::Key(Key::Escape, _, Action::Press, _) => {
-            window.set_should_close(true);
-        }
-        Event::Key(Key::W, _, Action::Repeat | Action::Press, _) => {
-            camera.process_keyboard(CameraMovement::FORWARD, delta_time)
-        }
-        Event::Key(Key::A, _, Action::Repeat | Action::Press, _) => {
-            camera.process_keyboard(CameraMovement::LEFT, delta_time)
-        }
-        Event::Key(Key::S, _, Action::Repeat | Action::Press, _) => {
-            camera.process_keyboard(CameraMovement::BACKWARD, delta_time)
-        }
-        Event::Key(Key::D, _, Action::Repeat | Action::Press, _) => {
-            camera.process_keyboard(CameraMovement::RIGHT, delta_time)
-        }
-        // Event::MouseButton(, , )
-        _ => {}
-    }
-}
-
-#[allow(dead_code)]
-extern "system" fn message_callback(
-    source: gl::types::GLenum,
-    ty: gl::types::GLenum,
-    _id: gl::types::GLuint,
-    severity: gl::types::GLenum,
-    _length: gl::types::GLsizei,
-    message: *const gl::types::GLchar,
-    _user_param: *mut std::os::raw::c_void,
-) {
-    let message_str = unsafe { std::ffi::CStr::from_ptr(message).to_string_lossy() };
-
-    let message_source = match source {
-        gl::DEBUG_SOURCE_API => "OpenGL API",
-        gl::DEBUG_SOURCE_WINDOW_SYSTEM => "Window System",
-        gl::DEBUG_SOURCE_SHADER_COMPILER => "Shader Compiler",
-        gl::DEBUG_SOURCE_THIRD_PARTY => "Third Party",
-        gl::DEBUG_SOURCE_APPLICATION => "Application",
-        gl::DEBUG_SOURCE_OTHER => "Other",
-        _ => "Unknown",
-    };
-
-    let message_type = match ty {
-        gl::DEBUG_TYPE_ERROR => "Error",
-        gl::DEBUG_TYPE_DEPRECATED_BEHAVIOR => "Deprecated Behavior",
-        gl::DEBUG_TYPE_UNDEFINED_BEHAVIOR => "Undefined Behavior",
-        gl::DEBUG_TYPE_PORTABILITY => "Portability",
-        gl::DEBUG_TYPE_PERFORMANCE => "Performance",
-        gl::DEBUG_TYPE_MARKER => "Marker",
-        gl::DEBUG_TYPE_OTHER => "Other",
-        gl::DEBUG_TYPE_PUSH_GROUP => "Push Group",
-        gl::DEBUG_TYPE_POP_GROUP => "Pop Group",
-        _ => "Unknown",
-    };
-
-    let message_severity = match severity {
-        gl::DEBUG_SEVERITY_HIGH => "High",
-        gl::DEBUG_SEVERITY_MEDIUM => "Medium",
-        gl::DEBUG_SEVERITY_LOW => "Low",
-        gl::DEBUG_SEVERITY_NOTIFICATION => "Notification",
-        _ => "Unknown",
-    };
-
-    panic!(
-        "OpenGL Debug Message: Source: {}, Type: {}, Severity: {}, Message: {}",
-        message_source, message_type, message_severity, message_str
-    );
-}
+//     match event {
+//         Event::Key(Key::Escape, _, Action::Press, _) => {
+//             window.set_should_close(true);
+//         }
+//         Event::Key(Key::W, _, Action::Repeat | Action::Press, _) => {
+//             camera.process_keyboard(CameraMovement::FORWARD, delta_time)
+//         }
+//         Event::Key(Key::A, _, Action::Repeat | Action::Press, _) => {
+//             camera.process_keyboard(CameraMovement::LEFT, delta_time)
+//         }
+//         Event::Key(Key::S, _, Action::Repeat | Action::Press, _) => {
+//             camera.process_keyboard(CameraMovement::BACKWARD, delta_time)
+//         }
+//         Event::Key(Key::D, _, Action::Repeat | Action::Press, _) => {
+//             camera.process_keyboard(CameraMovement::RIGHT, delta_time)
+//         }
+//         // Event::MouseButton(, , )
+//         _ => {}
+//     }
+// }

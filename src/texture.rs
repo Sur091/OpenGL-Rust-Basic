@@ -1,20 +1,16 @@
 use image::io::Reader as ImageReader;
-pub struct Texture<'a> {
+pub struct Texture {
     renderer_id: u32,
-    #[allow(dead_code)]
-    file_path: &'a str,
-    #[allow(dead_code)]
+    _file_path: String,
     width: i32,
-    #[allow(dead_code)]
     height: i32,
-    #[allow(dead_code)]
     bpp: i32,
     // #[allow(dead_code)]
     // img: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
 }
 
-impl<'a> Texture<'a> {
-    pub fn new(file_path: &'a str) -> Self {
+impl Texture {
+    pub fn new(file_path: &str) -> Self {
         let img: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> = ImageReader::open(file_path)
             .expect("Can't open file path for the image")
             .decode()
@@ -51,7 +47,7 @@ impl<'a> Texture<'a> {
 
         return Self {
             renderer_id,
-            file_path,
+            _file_path: file_path.to_string(),
             width,
             height,
             bpp,
@@ -89,7 +85,7 @@ impl<'a> Texture<'a> {
     }
 }
 
-impl<'a> Drop for Texture<'a> {
+impl Drop for Texture {
     fn drop(&mut self) {
         unsafe {
             gl::DeleteTextures(1, &self.renderer_id);
