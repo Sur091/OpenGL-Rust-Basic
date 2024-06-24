@@ -1,5 +1,7 @@
 use glutin::config::ConfigTemplateBuilder;
 
+// use cgf_aliases::cgf_aliases;
+
 mod camera;
 mod index_buffer;
 mod renderer;
@@ -24,6 +26,8 @@ struct App {
     renderer: Option<Renderer>,
     // NOTE: `AppState` carries the `Window`, thus it should be dropped after everything else.
     state: Option<AppState>,
+    last_frame: std::time::Instant,
+    last_mouse: winit::dpi::PhysicalPosition<f32>,
 }
 
 struct AppState {
@@ -43,6 +47,8 @@ impl App {
             not_current_gl_context: None,
             state: None,
             renderer: None,
+            last_frame: std::time::Instant::now(),
+            last_mouse: winit::dpi::PhysicalPosition::new(0.0f32, 0.0),
         }
     }
 }
@@ -204,8 +210,15 @@ impl winit::application::ApplicationHandler for App {
         event: winit::event::WindowEvent,
     ) {
         use glutin::prelude::GlSurface;
+        use winit::{
+            event::{KeyEvent, WindowEvent, DeviceEvent},
+            keyboard::{Key, NamedKey},
+        };
+
+        let delta_time = self.last_frame.elapsed().as_secs_f32();
+
         match event {
-            winit::event::WindowEvent::Resized(size) if size.width != 0 && size.height != 0 => {
+            WindowEvent::Resized(size) if size.width != 0 && size.height != 0 => {
                 // Some platforms like EGL require resizing GL surface to update the size
                 // Notable platforms here are Wayland and macOS, other don't require it
                 // and the function is no-op, but it's wise to resize it for portability
@@ -225,15 +238,34 @@ impl winit::application::ApplicationHandler for App {
                     renderer.resize(size.width as i32, size.height as i32);
                 }
             }
-            winit::event::WindowEvent::CloseRequested
-            | winit::event::WindowEvent::KeyboardInput {
+            WindowEvent::CloseRequested
+            | WindowEvent::KeyboardInput {
                 event:
-                    winit::event::KeyEvent {
-                        logical_key: winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape),
+                    KeyEvent {
+                        logical_key: Key::Named(NamedKey::Escape),
                         ..
                     },
                 ..
             } => event_loop.exit(),
+            WindowEvent::KeyboardInput { event: KeyEvent {logical_key: Key::Character(ch), ..}, ..} => {
+                if let Some(renderer) = &mut self.renderer {
+                    match ch.as_str() {
+                        "w" => renderer.camera.process_keyboard(CameraMovement::FORWARD,  delta_time),
+                        "a" => renderer.camera.process_keyboard(CameraMovement::LEFT, delta_time),
+                        "s" => renderer.camera.process_keyboard(CameraMovement::BACKWARD, delta_time),
+                        "d" => renderer.camera.process_keyboard(CameraMovement::RIGHT, delta_time),
+                        _ => (),
+                    }
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                if let Some(renderer) = &mut self.renderer {
+                    let new_position: winit::dpi::PhysicalPosition<f32> = position.cast();
+                    let (x_offset, y_offset) = (self.last_mouse.x - new_position.x, new_position.y - self.last_mouse.y);
+                    self.last_mouse = new_position;
+                    renderer.camera.process_mouse_movements(x_offset, y_offset);
+                }
+            }
             _ => (),
         }
     }
@@ -249,6 +281,7 @@ impl winit::application::ApplicationHandler for App {
             let renderer = self.renderer.as_mut().unwrap();
             // renderer.draw();
             renderer.draw_array();
+            self.last_frame = std::time::Instant::now();
             window.request_redraw();
 
             gl_surface.swap_buffers(gl_context).unwrap();

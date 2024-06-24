@@ -17,7 +17,7 @@ pub struct Renderer {
     index_buffer: IndexBuffer,
     shader: Shader,
     textures: Vec<Texture>,
-    camera: Camera,
+    pub camera: Camera,
     projection: glm::Mat4,
     start_time: std::time::Instant,
 }
