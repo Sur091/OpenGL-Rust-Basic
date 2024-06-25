@@ -20,7 +20,7 @@ pub struct Camera {
     // Camera Options
     movement_speed: f32,
     mouse_sensitivity: f32,
-    zoom: f32,
+    _zoom: f32,
 }
 
 impl Camera {
@@ -57,7 +57,7 @@ impl Camera {
 
             movement_speed,
             mouse_sensitivity,
-            zoom,
+            _zoom: zoom,
         }
     }
 
@@ -83,9 +83,9 @@ impl Camera {
         self.up = glm::normalize(&glm::cross(&self.right, &self.front));
     }
 
-    pub fn process_mouse_scroll(&mut self, y_offset: f32) {
-        self.zoom -= y_offset;
-        self.zoom = self.zoom.clamp(1.0, 45.0);
+    pub fn _process_mouse_scroll(&mut self, y_offset: f32) {
+        self._zoom -= y_offset;
+        self._zoom = self._zoom.clamp(1.0, 45.0);
     }
 
     fn calculate_front_vector(pitch: f32, yaw: f32) -> glm::Vec3 {
@@ -129,7 +129,7 @@ impl Default for Camera {
 
             movement_speed,
             mouse_sensitivity,
-            zoom,
+            _zoom: zoom,
         }
     }
 }
