@@ -60,6 +60,13 @@ impl Shader {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn set_uniform_3f(&mut self, name: &str, v0: f32, v1: f32, v2: f32) {
+        unsafe {
+            gl::Uniform3f(self.get_uniform_location(name), v0, v1, v2);
+        }
+    }
+
     pub fn set_uniform_mat4f(&mut self, name: &str, proj: &glm::Mat4) {
         unsafe {
             gl::UniformMatrix4fv(

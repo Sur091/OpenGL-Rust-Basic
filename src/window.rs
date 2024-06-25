@@ -165,6 +165,7 @@ impl winit::application::ApplicationHandler for App {
             eprintln!("Error setting vsync: {res:?}");
         }
 
+
         assert!(self
             .state
             .replace(AppState {
@@ -203,6 +204,7 @@ impl winit::application::ApplicationHandler for App {
         };
 
         let delta_time = self.last_frame.elapsed().as_secs_f32();
+
 
         match event {
             WindowEvent::Resized(size) if size.width != 0 && size.height != 0 => {
@@ -272,6 +274,15 @@ impl winit::application::ApplicationHandler for App {
                     renderer.camera.process_mouse_movements(x_offset, y_offset);
                 }
             }
+            WindowEvent::CursorEntered {device_id} => {
+                // Tried to grab the cursor to make it not move. Can't make it work. Documetation says it returns error, but I don't see any error either. This is so confusing.
+                // if let Some(app_state) = &self.state {
+                //     println!("Grabbing the cursor");
+                //     if let Err(err) = app_state.window.set_cursor_grab(winit::window::CursorGrabMode::Locked) {
+                //         eprintln!("Error setting cursor grab: {err}");
+                //     }
+                // }
+            }
             _ => (),
         }
     }
@@ -285,8 +296,7 @@ impl winit::application::ApplicationHandler for App {
         }) = self.state.as_ref()
         {
             let renderer = self.renderer.as_mut().unwrap();
-            // renderer.draw();
-            renderer.draw_array();
+            renderer.draw();
             self.last_frame = std::time::Instant::now();
             window.request_redraw();
 

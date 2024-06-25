@@ -9,6 +9,7 @@ mod texture;
 mod vertex_array;
 mod vertex_buffer;
 mod window;
+mod light;
 
 use window::App;
 

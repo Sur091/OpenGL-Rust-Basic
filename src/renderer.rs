@@ -3,9 +3,14 @@ use std::ffi::CString;
 use nalgebra_glm as glm;
 
 use super::{
-    camera::Camera, index_buffer::IndexBuffer, shader::Shader, texture::Texture,
-    vertex_array::vertex_buffer_layout::VertexBufferLayout, vertex_array::VertexArray,
+    camera::Camera, 
+    index_buffer::IndexBuffer, 
+    shader::Shader, 
+    texture::Texture,
+    vertex_array::vertex_buffer_layout::VertexBufferLayout, 
+    vertex_array::VertexArray,
     vertex_buffer::VertexBuffer,
+    light::Light,
 };
 
 pub struct Color(pub f32, pub f32, pub f32, pub f32);
@@ -15,57 +20,58 @@ pub struct Renderer {
     _vertex_buffer: VertexBuffer,
     vertex_array: VertexArray,
     index_buffer: IndexBuffer,
-    shader: Shader,
+    shader: Vec<Shader>,
     textures: Vec<Texture>,
     pub camera: Camera,
     projection: glm::Mat4,
     start_time: std::time::Instant,
+    light: Light,
 }
 
 impl Renderer {
     #[rustfmt::skip]
-    const VERTICES: [f32; 36*5] = [
-        -0.5, -0.5, -0.5, 0.0, 0.0,
-         0.5, -0.5, -0.5, 1.0, 0.0,
-         0.5,  0.5, -0.5, 1.0, 1.0,
-         0.5,  0.5, -0.5, 1.0, 1.0,
-        -0.5,  0.5, -0.5, 0.0, 1.0,
-        -0.5, -0.5, -0.5, 0.0, 0.0,
+    const VERTICES: [f32; 36*3] = [
+        -0.5, -0.5, -0.5,
+         0.5, -0.5, -0.5,
+         0.5,  0.5, -0.5,
+         0.5,  0.5, -0.5,
+        -0.5,  0.5, -0.5,
+        -0.5, -0.5, -0.5,
         //
-        -0.5, -0.5,  0.5, 0.0, 0.0,
-         0.5, -0.5,  0.5, 1.0, 0.0,
-         0.5,  0.5,  0.5, 1.0, 1.0,
-         0.5,  0.5,  0.5, 1.0, 1.0,
-        -0.5,  0.5,  0.5, 0.0, 1.0,
-        -0.5, -0.5,  0.5, 0.0, 0.0,
+        -0.5, -0.5,  0.5,
+         0.5, -0.5,  0.5,
+         0.5,  0.5,  0.5,
+         0.5,  0.5,  0.5,
+        -0.5,  0.5,  0.5,
+        -0.5, -0.5,  0.5,
         //
-        -0.5,  0.5,  0.5, 1.0, 0.0,
-        -0.5,  0.5, -0.5, 1.0, 1.0,
-        -0.5, -0.5, -0.5, 0.0, 1.0,
-        -0.5, -0.5, -0.5, 0.0, 1.0,
-        -0.5, -0.5,  0.5, 0.0, 0.0,
-        -0.5,  0.5,  0.5, 1.0, 0.0,
+        -0.5,  0.5,  0.5,
+        -0.5,  0.5, -0.5,
+        -0.5, -0.5, -0.5,
+        -0.5, -0.5, -0.5,
+        -0.5, -0.5,  0.5,
+        -0.5,  0.5,  0.5,
         //
-         0.5,  0.5,  0.5, 1.0, 0.0,
-         0.5,  0.5, -0.5, 1.0, 1.0,
-         0.5, -0.5, -0.5, 0.0, 1.0,
-         0.5, -0.5, -0.5, 0.0, 1.0,
-         0.5, -0.5,  0.5, 0.0, 0.0,
-         0.5,  0.5,  0.5, 1.0, 0.0,
+         0.5,  0.5,  0.5,
+         0.5,  0.5, -0.5,
+         0.5, -0.5, -0.5,
+         0.5, -0.5, -0.5,
+         0.5, -0.5,  0.5,
+         0.5,  0.5,  0.5,
         //
-        -0.5, -0.5, -0.5, 0.0, 1.0,
-         0.5, -0.5, -0.5, 1.0, 1.0,
-         0.5, -0.5,  0.5, 1.0, 0.0,
-         0.5, -0.5,  0.5, 1.0, 0.0,
-        -0.5, -0.5,  0.5, 0.0, 0.0,
-        -0.5, -0.5, -0.5, 0.0, 1.0,
+        -0.5, -0.5, -0.5,
+         0.5, -0.5, -0.5,
+         0.5, -0.5,  0.5,
+         0.5, -0.5,  0.5,
+        -0.5, -0.5,  0.5,
+        -0.5, -0.5, -0.5,
         //
-        -0.5,  0.5, -0.5, 0.0, 1.0,
-         0.5,  0.5, -0.5, 1.0, 1.0,
-         0.5,  0.5,  0.5, 1.0, 0.0,
-         0.5,  0.5,  0.5, 1.0, 0.0,
-        -0.5,  0.5,  0.5, 0.0, 0.0,
-        -0.5,  0.5, -0.5, 0.0, 1.0,
+        -0.5,  0.5, -0.5,
+         0.5,  0.5, -0.5,
+         0.5,  0.5,  0.5,
+         0.5,  0.5,  0.5,
+        -0.5,  0.5,  0.5,
+        -0.5,  0.5, -0.5,
     ];
     const INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
 
@@ -150,42 +156,40 @@ impl Renderer {
             gl::DebugMessageCallback(Some(Self::message_callback), std::ptr::null());
         }
 
-        const VERT_SHADER_PATH: &str = "./src/shader/vertex_shader.glsl";
+        const VERT_SHADER_PATH: &str = "./src/shader/cubes.vert";
 
-        const FRAG_SHADER_PATH: &str = "./src/shader/fragment_shader.glsl";
+        const FRAG_SHADER_PATH: &str = "./src/shader/cubes.frag";
 
-        let mut shader = Shader::new(VERT_SHADER_PATH, FRAG_SHADER_PATH);
+        let mut _cube_shader = Shader::new(VERT_SHADER_PATH, FRAG_SHADER_PATH);
+        let mut object_shader = Shader::new("./src/shader/object.vert", "./src/shader/object.frag");
+        let light_shader = Shader::new("./src/shader/light.vert", "./src/shader/light.frag");
+
+        object_shader.bind();
+        object_shader.set_uniform_3f("u_object_color", 1.0, 0.5, 0.31);
+        object_shader.set_uniform_3f("u_light_color", 1.0, 1.0, 1.0);
 
         // const SIZE: f32 = 0.5;
 
         let vertex_array = VertexArray::new();
-        // let light_vertex_array = VertexArray::new();
+        let light_vertex_array = VertexArray::new();
 
-        let vbo = VertexBuffer::new(&Self::VERTICES);
+        let vertex_buffer = VertexBuffer::new(&Self::VERTICES);
 
         let index_buffer = IndexBuffer::new(&Self::INDICES);
 
         let mut layout = VertexBufferLayout::new();
         layout.push_f32(3);
-        layout.push_f32(2);
 
-        vertex_array.add_buffer(&vbo, &layout);
+        vertex_array.add_buffer(&vertex_buffer, &layout);
+        light_vertex_array.add_buffer(&vertex_buffer, &layout);
 
-        let texture0 = Texture::new("./assets/FlowerPattern2.png");
-
-        let texture1 = Texture::new("./assets/BlueFlowers.jpg");
-
-        shader.bind();
-        shader.set_uniform_1i("texture0", 0);
-        shader.set_uniform_1i("texture1", 1);
-
-        vbo.unbind();
+        vertex_buffer.unbind();
         vertex_array.unbind();
         index_buffer.unbind();
 
         let camera = Camera::default();
 
-        Self::clear_color(Color(0.6, 0.5, 0.1, 1.0));
+        Self::clear_color(Color(0.0, 0.0, 0.0, 1.0));
 
         // gl_display.
         let aspect_ratio = 1.0;
@@ -196,13 +200,14 @@ impl Renderer {
         Self {
             // _gl_display: gl_display.clone(),
             vertex_array,
-            _vertex_buffer: vbo,
-            shader,
+            _vertex_buffer: vertex_buffer,
+            shader: vec![object_shader],
             index_buffer,
-            textures: vec![texture0, texture1],
+            textures: vec![],
             camera,
             projection,
             start_time,
+            light: Light::new(light_shader, light_vertex_array),
         }
     }
 
@@ -218,24 +223,8 @@ impl Renderer {
         }
     }
 
-    fn bind(&mut self) {
-        self.shader.bind();
-        self.vertex_array.bind();
-        self.index_buffer.bind();
-
-        for (i, texture) in self.textures.iter().enumerate() {
-            texture.bind(i as u32);
-        }
-
-        self.shader
-            .set_uniform_mat4f("u_view", &self.camera.get_view_matrix());
-        self.shader
-            .set_uniform_mat4f("u_projection", &self.projection);
-    }
-
-    pub fn draw(&mut self) {
-        self.bind();
-        self.clear();
+    fn draw_elements(&mut self) {
+        // self.clear();
         
         unsafe {
             gl::DrawElements(
@@ -249,13 +238,33 @@ impl Renderer {
 
     }
 
-    pub fn draw_array(&mut self) {
-        self.bind();
-        self.clear();
+    fn draw_array(&mut self) {
+        // self.clear();
+        unsafe { gl::DrawArrays(gl::TRIANGLES, 0, Self::VERTICES.len() as i32) }
+    }
 
+    pub fn draw(&mut self) {
+        self.clear();
         
+        self.light.bind(&self.camera.get_view_matrix(), &self.projection);
+        self.draw_array();
+        
+
+        self.vertex_array.bind();
+        self.index_buffer.bind();
+        
+        for (i, texture) in self.textures.iter().enumerate() {
+            texture.bind(i as u32);
+        }
+        
+        self.shader[0].bind();
+        self.shader[0]
+            .set_uniform_mat4f("u_view", &self.camera.get_view_matrix());
+        self.shader[0]
+            .set_uniform_mat4f("u_projection", &self.projection);
+
         let cubes: [glm::Vec3; 6] = [
-            glm::vec3(0.0, 0.0, 0.0),
+            glm::vec3(0.0, 0.0, -7.0),
             glm::vec3(1.0, 2.0, 3.0),
             glm::vec3(10.0, -7.0, 2.0),
             glm::vec3(3.0, -9.0, 1.0),
@@ -271,12 +280,10 @@ impl Renderer {
                 -55.0 * glm::pi::<f32>() / 180.0 * self.start_time.elapsed().as_secs_f32(),
                 &glm::vec3(0.5, 1.0, 0.0),
             );
-            self.shader.set_uniform_mat4f("u_model", &model);
-            unsafe { gl::DrawArrays(gl::TRIANGLES, 0, Self::VERTICES.len() as i32) }
+            self.shader[0].set_uniform_mat4f("u_model", &model);
+            self.draw_array()
         }
-
     }
-
     pub fn clear_color(c: Color) {
         unsafe { gl::ClearColor(c.0, c.1, c.2, c.3) }
     }
