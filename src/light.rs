@@ -8,7 +8,7 @@ use super::{
 pub struct Light {
     pub shader: Shader,
     pub vertex_array: VertexArray, 
-    position: glm::Vec3,
+    pub position: glm::Vec3,
     scale: glm::Vec3,
 }
 
@@ -17,7 +17,7 @@ impl Light {
         Self {
             shader,
             vertex_array,
-            position: glm::vec3(1.2, 1.0, 2.0),
+            position: glm::vec3(0.2, 0.09, -2.0),
             scale: glm::vec3(0.2, 0.2, 0.2),
         }
     }
