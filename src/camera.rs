@@ -101,7 +101,7 @@ impl Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        let position = glm::vec3(0.0, 0.0, 0.0);
+        let position = glm::vec3(0.0, 0.0, 2.0);
         let world_up = glm::vec3(0.0, 1.0, 0.0);
 
         let yaw = Self::YAW;

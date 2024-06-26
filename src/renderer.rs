@@ -10,7 +10,7 @@ use super::{
     vertex_array::vertex_buffer_layout::VertexBufferLayout, 
     vertex_array::VertexArray,
     vertex_buffer::VertexBuffer,
-    light::Light,
+    // light::Light,
 };
 
 pub struct Color(pub f32, pub f32, pub f32, pub f32);
@@ -20,58 +20,21 @@ pub struct Renderer {
     _vertex_buffer: VertexBuffer,
     vertex_array: VertexArray,
     index_buffer: IndexBuffer,
-    shader: Vec<Shader>,
+    shader: Shader,
     textures: Vec<Texture>,
     pub camera: Camera,
     projection: glm::Mat4,
     start_time: std::time::Instant,
-    light: Light,
+    // light: Light,
 }
 
 impl Renderer {
     #[rustfmt::skip]
-    const VERTICES: [f32; 36*6] = [
-            -0.5, -0.5, -0.5,  0.0,  0.0, -1.0,
-             0.5, -0.5, -0.5,  0.0,  0.0, -1.0, 
-             0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 
-             0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 
-            -0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 
-            -0.5, -0.5, -0.5,  0.0,  0.0, -1.0, 
-            //
-            -0.5, -0.5,  0.5,  0.0,  0.0, 1.0,
-             0.5, -0.5,  0.5,  0.0,  0.0, 1.0,
-             0.5,  0.5,  0.5,  0.0,  0.0, 1.0,
-             0.5,  0.5,  0.5,  0.0,  0.0, 1.0,
-            -0.5,  0.5,  0.5,  0.0,  0.0, 1.0,
-            -0.5, -0.5,  0.5,  0.0,  0.0, 1.0,
-            //
-            -0.5,  0.5,  0.5, -1.0,  0.0,  0.0,
-            -0.5,  0.5, -0.5, -1.0,  0.0,  0.0,
-            -0.5, -0.5, -0.5, -1.0,  0.0,  0.0,
-            -0.5, -0.5, -0.5, -1.0,  0.0,  0.0,
-            -0.5, -0.5,  0.5, -1.0,  0.0,  0.0,
-            -0.5,  0.5,  0.5, -1.0,  0.0,  0.0,
-            //
-             0.5,  0.5,  0.5,  1.0,  0.0,  0.0,
-             0.5,  0.5, -0.5,  1.0,  0.0,  0.0,
-             0.5, -0.5, -0.5,  1.0,  0.0,  0.0,
-             0.5, -0.5, -0.5,  1.0,  0.0,  0.0,
-             0.5, -0.5,  0.5,  1.0,  0.0,  0.0,
-             0.5,  0.5,  0.5,  1.0,  0.0,  0.0,
-            //
-            -0.5, -0.5, -0.5,  0.0, -1.0,  0.0,
-             0.5, -0.5, -0.5,  0.0, -1.0,  0.0,
-             0.5, -0.5,  0.5,  0.0, -1.0,  0.0,
-             0.5, -0.5,  0.5,  0.0, -1.0,  0.0,
-            -0.5, -0.5,  0.5,  0.0, -1.0,  0.0,
-            -0.5, -0.5, -0.5,  0.0, -1.0,  0.0,
-            //
-            -0.5,  0.5, -0.5,  0.0,  1.0,  0.0,
-             0.5,  0.5, -0.5,  0.0,  1.0,  0.0,
-             0.5,  0.5,  0.5,  0.0,  1.0,  0.0,
-             0.5,  0.5,  0.5,  0.0,  1.0,  0.0,
-            -0.5,  0.5,  0.5,  0.0,  1.0,  0.0,
-            -0.5,  0.5, -0.5,  0.0,  1.0,  0.0
+    const VERTICES: [f32; 8] = [
+        -1.0, -1.0,
+         1.0, -1.0,
+         1.0,  1.0,
+        -1.0,  1.0,
     ];
     const INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
 
@@ -160,13 +123,13 @@ impl Renderer {
 
         const FRAG_SHADER_PATH: &str = "./src/shader/cubes.frag";
 
-        let mut _cube_shader = Shader::new(VERT_SHADER_PATH, FRAG_SHADER_PATH);
-        let mut object_shader = Shader::new("./src/shader/object.vert", "./src/shader/object.frag");
-        let light_shader = Shader::new("./src/shader/light.vert", "./src/shader/light.frag");
+        let cube_shader = Shader::new(VERT_SHADER_PATH, FRAG_SHADER_PATH);
+        // let mut object_shader = Shader::new("./src/shader/object.vert", "./src/shader/object.frag");
+        // let light_shader = Shader::new("./src/shader/light.vert", "./src/shader/light.frag");
 
-        object_shader.bind();
-        object_shader.set_uniform_3f("u_object_color", 1.0, 0.5, 0.31);
-        object_shader.set_uniform_3f("u_light_color", 1.0, 1.0, 1.0);
+        // object_shader.bind();
+        // object_shader.set_uniform_3f("u_object_color", 1.0, 0.5, 0.31);
+        // object_shader.set_uniform_3f("u_light_color", 1.0, 1.0, 1.0);
 
         // const SIZE: f32 = 0.5;
 
@@ -178,8 +141,7 @@ impl Renderer {
         let index_buffer = IndexBuffer::new(&Self::INDICES);
 
         let mut layout = VertexBufferLayout::new();
-        layout.push_f32(3);
-        layout.push_f32(3);
+        layout.push_f32(2);
 
         vertex_array.add_buffer(&vertex_buffer, &layout);
         light_vertex_array.add_buffer(&vertex_buffer, &layout);
@@ -202,13 +164,13 @@ impl Renderer {
             // _gl_display: gl_display.clone(),
             vertex_array,
             _vertex_buffer: vertex_buffer,
-            shader: vec![object_shader],
+            shader: cube_shader,
             index_buffer,
             textures: vec![],
             camera,
             projection,
             start_time,
-            light: Light::new(light_shader, light_vertex_array, glm::vec3(-0.5, 1.0, -7.5)),
+            // light: Light::new(light_shader, light_vertex_array, glm::vec3(-0.5, 1.0, -7.5)),
         }
     }
 
@@ -246,48 +208,20 @@ impl Renderer {
 
     pub fn draw(&mut self) {
         self.clear();
-        
-        self.light.bind(&self.camera.get_view_matrix(), &self.projection);
-        self.draw_array();
-        
+                
+        self.shader.bind();
+        self.shader
+            .set_uniform_mat4f("u_view", &self.camera.get_view_matrix());
+        self.shader
+            .set_uniform_mat4f("u_projection", &self.projection);
+        let model = glm::identity();
+        self.shader.set_uniform_mat4f("u_model", &model);
 
+        self.shader.set_uniform_2f("u_resolution", 2.0, 2.0);
+        self.shader.set_uniform_1f("u_aspect_ratio", 16.0 / 9.0);
         self.vertex_array.bind();
         self.index_buffer.bind();
-        
-        for (i, texture) in self.textures.iter().enumerate() {
-            texture.bind(i as u32);
-        }
-        
-        self.shader[0].bind();
-        self.shader[0]
-            .set_uniform_mat4f("u_view", &self.camera.get_view_matrix());
-        self.shader[0]
-            .set_uniform_mat4f("u_projection", &self.projection);
-        self.shader[0]
-            .set_uniform_3f("u_light_position", self.light.position.x, self.light.position.y, self.light.position.z);
-        self.shader[0]
-            .set_uniform_3f("u_view_position", self.camera.position.x, self.camera.position.y, self.camera.position.z);
-
-        let cubes: [glm::Vec3; 2] = [
-            glm::vec3(0.0, 0.0, -7.0),
-            // glm::vec3(1.0, 2.0, 3.0),
-            // glm::vec3(10.0, -7.0, 2.0),
-            // glm::vec3(3.0, -9.0, 1.0),
-            // glm::vec3(-6.0, 0.0, -7.0),
-            glm::vec3(-1.0, 0.0, -8.0),
-        ];
-
-        for cube_orgin in cubes {
-            let model = glm::identity();
-            let model = glm::translate(&model, &cube_orgin);
-            // let model = glm::rotate(
-            //     &model,
-            //     -55.0 * glm::pi::<f32>() / 180.0 * self.start_time.elapsed().as_secs_f32(),
-            //     &glm::vec3(0.5, 1.0, 0.0),
-            // );
-            self.shader[0].set_uniform_mat4f("u_model", &model);
-            self.draw_array()
-        }
+        self.draw_elements();
     }
     pub fn clear_color(c: Color) {
         unsafe { gl::ClearColor(c.0, c.1, c.2, c.3) }

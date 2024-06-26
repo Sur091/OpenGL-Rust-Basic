@@ -1,78 +1,79 @@
 #version 450 core
 
 
-// in vec2 vertex_uv;
-in vec2 vertex_texture_coord;
+in vec4 vertex_uv;
+// in vec2 vertex_texture_coord;
 
 layout(location=0) out vec4 color;
 
-// uniform float u_aspect_ratio;
-// uniform float u_time;
-uniform sampler2D texture0;
-uniform sampler2D texture1;
+uniform vec2 u_resolution;
+uniform float u_aspect_ratio;
 
-// float polygon(vec2 loc, vec2 center, int sides, float raidus, float theta);
-// float circle(vec2 loc, vec2 center, float radius);
-// mat2 rotate2D(float theta);
-// float random (in vec2 _st);
 
-// struct Ray {
-//     vec3 origin;
-//     vec3 direction;
-// };
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+};
+
+vec3 ray_at(in Ray ray, float t) {
+    return ray.origin + t * ray.direction;
+}
+
+
+
+float hit_sphere(in vec3 center, float radius, in Ray r) {
+    vec3 oc = center - r.origin;
+    float a = dot(r.direction, r.direction);
+    float b = -2.0 * dot(r.direction, oc);
+    float c = dot(oc, oc) - radius * radius;
+    float discriminant = b*b - 4*a*c;
+    
+    if (discriminant < 0.0) {
+        return -1.0;
+    } else {
+        return (-b - sqrt(discriminant)) / (2.0 * a);
+    }
+}
+
+vec3 ray_color(in Ray r) {
+    float t = hit_sphere(vec3(0.0, 0.0, -1.0), 0.5, r);
+    if (t > 0.0) {
+        vec3 N = normalize(ray_at(r, t) - vec3(0.0, 0.0, -1.0));
+        return 0.5 * (N + 1.0);
+    }
+    vec3 unit_direction = normalize(r.direction);
+    float a = 0.5 * (unit_direction.y + 1.0);
+    return (1.0 - a) * vec3(1.0) + a * vec3(0.5, 0.7, 1.0);
+}
 
 void main()
 {   
-    // vec2 uv = vertex_uv.xy + 0.5;
-    // uv.x *= u_aspect_ratio;
+    vec2 uv = vec2(vertex_uv.x * u_aspect_ratio, vertex_uv.y);
 
-    // Ray ray = Ray(vec3(0.0), vec3(1.0, 0.0, 0.0));
 
-    // float r = ray.origin.x;
-    // float g = uv.y;
-    // float b = 0.0;
+    // Camera
+    float focal_length = 1.0;
+    float viewport_height = 2.0;
+    float viewport_width = viewport_height * u_resolution.x / u_resolution.y;
+    vec3 camera_center = vec3(0.0);
 
-    vec4 tex_color1 = texture(texture0, vertex_texture_coord);
-    vec4 tex_color2 = texture(texture1, vertex_texture_coord);
+    // vectors across the horzontal and down the vertical viewport edges.
+    vec3 viewport_u = vec3(viewport_width, 0.0, 0.0);
+    vec3 viewport_v = vec3(0.0, -viewport_height, 0.0);
 
-    color = mix(tex_color1, tex_color2, 0.99);
-}
+    // horizontal and vertical delta vectors from pixel to pixel
+    // vec3 pixel_delta_u = viewport_u / image_width;
 
-// float polygon(vec2 loc, vec2 center, int sides, float raidus, float theta) {
-//     loc -= center;
-
-//     // Angle and radius from the current pixel
-//     float a = atan(loc.x,loc.y)+3.14159265358979 + theta;
-//     float r = 6.28318530718/float(sides);
-
-//     // Shaping function that modulate the distance
-//     float pct = cos(floor(.5+a/r)*r-a)*length(loc);
+    vec3 viewport_upper_left = camera_center - vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
+    // vec3 pixel00_loc = vec3()
     
-//     float delta = 0.01;
-//     return 1.-smoothstep(raidus-delta, raidus, pct);
-// }
+    
+    vec3 pixel_center = vec3(uv.xy, viewport_upper_left.z);
+    vec3 ray_direction = pixel_center - camera_center;
 
-// float circle(vec2 loc, vec2 center, float radius) {
-//     loc -= center;
+    Ray r = Ray(camera_center, ray_direction);
 
-//     float delta = 0.005;
+    vec3 pixel_color = ray_color(r);
 
-//     return 1.0 - smoothstep(
-//         radius * (radius - delta),
-//         radius * (radius  + delta),
-//         dot(loc, loc)
-//     );
-// }
-
-// mat2 rotate2D(float theta) {
-//     return mat2 (
-//         cos(theta), sin(theta),
-//         -sin(theta), cos(theta)
-//     );
-// }
-
-// float random (in vec2 _st) {
-//     return fract(sin(dot(_st.xy,
-//                          vec2(12.9898,78.233)))*
-//         43758.5453123);
-// }
+    color = vec4(pixel_color, 1.0);
+}

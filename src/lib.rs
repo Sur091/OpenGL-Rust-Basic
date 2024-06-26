@@ -16,7 +16,7 @@ use window::App;
 
 const TITLE: &str = "My First GLFW window";
 const WIDTH: u32 = 800;
-const HEIGHT: u32 = 800;
+const HEIGHT: u32 = 450;
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let size = winit::dpi::PhysicalSize::new(WIDTH, HEIGHT);
