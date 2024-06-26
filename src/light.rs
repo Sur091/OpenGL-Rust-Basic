@@ -13,11 +13,11 @@ pub struct Light {
 }
 
 impl Light {
-    pub fn new(shader: Shader, vertex_array: VertexArray) -> Self {
+    pub fn new(shader: Shader, vertex_array: VertexArray, position: glm::Vec3) -> Self {
         Self {
             shader,
             vertex_array,
-            position: glm::vec3(0.2, 0.09, -2.0),
+            position: position,
             scale: glm::vec3(0.2, 0.2, 0.2),
         }
     }
@@ -27,6 +27,10 @@ impl Light {
         let model = glm::scale(&model, &self.scale);
         model
     }
+
+    // pub fn move_light(&mut self, new_pos: glm::Vec3) {
+    //     self.position = new_pos;
+    // }
 
     pub fn bind(&mut self, view: &glm::Mat4, projection: &glm::Mat4) {
         self.shader.bind();

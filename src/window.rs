@@ -12,6 +12,7 @@ pub struct App {
     state: Option<AppState>,
     last_frame: std::time::Instant,
     last_mouse: Option<winit::dpi::PhysicalPosition<f32>>,
+    cursor_locked: bool,
 }
 
 struct AppState {
@@ -33,6 +34,7 @@ impl App {
             renderer: None,
             last_frame: std::time::Instant::now(),
             last_mouse: None,
+            cursor_locked: false,
         }
     }
 }
@@ -199,8 +201,9 @@ impl winit::application::ApplicationHandler for App {
     ) {
         use glutin::prelude::GlSurface;
         use winit::{
-            event::{KeyEvent, WindowEvent},
+            event::{KeyEvent, WindowEvent, ElementState, MouseButton},
             keyboard::{Key, NamedKey},
+            window::CursorGrabMode,
         };
 
         let delta_time = self.last_frame.elapsed().as_secs_f32();
@@ -264,24 +267,43 @@ impl winit::application::ApplicationHandler for App {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if let Some(renderer) = &mut self.renderer {
-                    let new_position: winit::dpi::PhysicalPosition<f32> = position.cast();
-                    let last_pos = self.last_mouse.unwrap_or(new_position.clone());
-                    let (x_offset, y_offset) = (
-                        last_pos.x - new_position.x,
-                        new_position.y - last_pos.y,
-                    );
-                    self.last_mouse = Some(new_position);
-                    renderer.camera.process_mouse_movements(x_offset, y_offset);
+                    if self.cursor_locked {
+
+                        let new_position: winit::dpi::PhysicalPosition<f32> = position.cast();
+                        let last_pos = self.last_mouse.unwrap_or(new_position.clone());
+                        let (x_offset, y_offset) = (
+                            last_pos.x - new_position.x,
+                            new_position.y - last_pos.y,
+                        );
+                        self.last_mouse = Some(new_position);
+                        renderer.camera.process_mouse_movements(x_offset, y_offset);
+                    }
                 }
             }
-            WindowEvent::CursorEntered {device_id} => {
-                // Tried to grab the cursor to make it not move. Can't make it work. Documetation says it returns error, but I don't see any error either. This is so confusing.
-                // if let Some(app_state) = &self.state {
-                //     println!("Grabbing the cursor");
-                //     if let Err(err) = app_state.window.set_cursor_grab(winit::window::CursorGrabMode::Locked) {
-                //         eprintln!("Error setting cursor grab: {err}");
-                //     }
-                // }
+            // Tried to grab the cursor to make it not move. Can't make it work. Documetation says it returns error, but I don't see any error either. This is so confusing.
+            // if let Some(app_state) = &self.state {
+            //     println!("Grabbing the cursor");
+            //     if let Err(err) = app_state.window.set_cursor_grab(winit::window::CursorGrabMode::Locked) {
+            //         eprintln!("Error setting cursor grab: {err}");
+            //     }
+            // }
+            WindowEvent::CursorLeft {device_id: _} => {
+                self.last_mouse = None;
+            }
+            WindowEvent::MouseInput { state: ElementState::Pressed | ElementState::Released, button: MouseButton::Right, .. } => {
+                if let Some(app_state) = &self.state {
+                    let window = &app_state.window;
+                    if self.cursor_locked {
+                        window.set_cursor_grab(CursorGrabMode::None).unwrap();
+                        window.set_cursor_visible(true);
+                        self.cursor_locked = false;
+                        self.last_mouse = None;
+                    } else {
+                        window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+                        window.set_cursor_visible(false);
+                        self.cursor_locked = true;
+                    }
+                }
             }
             _ => (),
         }

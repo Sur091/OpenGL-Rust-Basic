@@ -9,7 +9,7 @@ pub enum CameraMovement {
 
 pub struct Camera {
     // Vectors
-    position: glm::Vec3,
+    pub position: glm::Vec3,
     front: glm::Vec3,
     up: glm::Vec3,
     right: glm::Vec3,

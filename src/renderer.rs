@@ -208,7 +208,7 @@ impl Renderer {
             camera,
             projection,
             start_time,
-            light: Light::new(light_shader, light_vertex_array),
+            light: Light::new(light_shader, light_vertex_array, glm::vec3(-0.5, 1.0, -7.5)),
         }
     }
 
@@ -265,6 +265,8 @@ impl Renderer {
             .set_uniform_mat4f("u_projection", &self.projection);
         self.shader[0]
             .set_uniform_3f("u_light_position", self.light.position.x, self.light.position.y, self.light.position.z);
+        self.shader[0]
+            .set_uniform_3f("u_view_position", self.camera.position.x, self.camera.position.y, self.camera.position.z);
 
         let cubes: [glm::Vec3; 2] = [
             glm::vec3(0.0, 0.0, -7.0),
