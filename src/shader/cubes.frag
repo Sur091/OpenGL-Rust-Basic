@@ -30,10 +30,16 @@ void hit_record_set_front_face(inout HitRecord hit_record, in Ray r, in vec3 out
     hit_record.front_face = dot(r.direction, outward_normal) < 0.0;
     hit_record.normal = hit_record.front_face ? outward_normal: -outward_normal;
 }
-
+`
 struct Sphere {
     vec3 center;
     float radius;
+};
+
+const int number_of_spheres = 2;
+
+struct HittableList {
+    Sphere spheres[2];
 };
 
 bool sphere_hit(in Sphere sphere, in Ray r, float ray_tmin, float ray_tmax, inout HitRecord rec) {
@@ -64,9 +70,25 @@ bool sphere_hit(in Sphere sphere, in Ray r, float ray_tmin, float ray_tmax, inou
     return true;
 }
 
-vec3 ray_color(in Ray r) {
+bool hittable_list_hit(inout HittableList hittable_list, in Ray r, float ray_tmin, float ray_tmax, inout HitRecord rec) {
+    HitRecord temp_rec = HitRecord(vec3(0.0), vec3(0.0), 0.0, false);
+    bool hit_anything = false;
+    float closest_so_far = ray_tmax;
+
+    for (int i = 0; i < number_of_spheres; i++) {
+        if (sphere_hit(hittable_list.spheres[i], r, ray_tmin, closest_so_far, temp_rec)) {
+            hit_anything = true;
+            closest_so_far = temp_rec.t;
+            rec = temp_rec;
+        }
+    }
+
+    return hit_anything;
+}
+
+vec3 ray_color(in Ray r, in HittableList world) {
     HitRecord rec = HitRecord(vec3(0.0), vec3(0.0), 0.0, false);
-    bool t = sphere_hit(Sphere(vec3(0.0, 0.0, -1.0), 0.5), r, 0.0, 99999.0, rec);
+    bool t = hittable_list_hit(world, r, 0.0, 99999.0, rec);
     if (t) {
         vec3 N = rec.normal;
         return 0.5 * (N + 1.0);
@@ -80,6 +102,11 @@ void main()
 {   
     vec2 uv = vec2(vertex_uv.x * u_aspect_ratio, vertex_uv.y);
 
+    // World
+
+    HittableList world;
+    world.spheres[0] = Sphere(vec3(0.0, 0.0, -1.0), 0.5);
+    world.spheres[1] = Sphere(vec3(0.0, -100.5, -1.0), 100.0);
 
     // Camera
     float focal_length = 1.0;
@@ -103,7 +130,7 @@ void main()
 
     Ray r = Ray(camera_center, ray_direction);
 
-    vec3 pixel_color = ray_color(r);
+    vec3 pixel_color = ray_color(r, world);
 
     color = vec4(pixel_color, 1.0);
 }
