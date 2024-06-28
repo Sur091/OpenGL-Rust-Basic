@@ -23,7 +23,13 @@ struct HitRecord {
     vec3 p;
     vec3 normal;
     float t;
+    bool front_face;
 };
+
+void hit_record_set_front_face(inout HitRecord hit_record, in Ray r, in vec3 outward_normal) {
+    hit_record.front_face = dot(r.direction, outward_normal) < 0.0;
+    hit_record.normal = hit_record.front_face ? outward_normal: -outward_normal;
+}
 
 struct Sphere {
     vec3 center;
@@ -52,13 +58,14 @@ bool sphere_hit(in Sphere sphere, in Ray r, float ray_tmin, float ray_tmax, inou
 
     rec.t = root;
     rec.p = ray_at(r, rec.t);
-    rec.normal = (rec.p - sphere.center) / sphere.radius;
+    vec3 outward_normal = (rec.p - sphere.center) / sphere.radius;
+    hit_record_set_front_face(rec, r, outward_normal);
 
     return true;
 }
 
 vec3 ray_color(in Ray r) {
-    HitRecord rec = HitRecord(vec3(0.0), vec3(0.0), 0.0);
+    HitRecord rec = HitRecord(vec3(0.0), vec3(0.0), 0.0, false);
     bool t = sphere_hit(Sphere(vec3(0.0, 0.0, -1.0), 0.5), r, 0.0, 99999.0, rec);
     if (t) {
         vec3 N = rec.normal;
