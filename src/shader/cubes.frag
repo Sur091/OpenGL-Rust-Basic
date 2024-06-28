@@ -19,26 +19,49 @@ vec3 ray_at(in Ray ray, float t) {
     return ray.origin + t * ray.direction;
 }
 
+struct HitRecord {
+    vec3 p;
+    vec3 normal;
+    float t;
+};
 
+struct Sphere {
+    vec3 center;
+    float radius;
+};
 
-float hit_sphere(in vec3 center, float radius, in Ray r) {
-    vec3 oc = center - r.origin;
+bool sphere_hit(in Sphere sphere, in Ray r, float ray_tmin, float ray_tmax, inout HitRecord rec) {
+    vec3 oc = sphere.center - r.origin;
     float a = dot(r.direction, r.direction);
-    float b = -2.0 * dot(r.direction, oc);
-    float c = dot(oc, oc) - radius * radius;
-    float discriminant = b*b - 4*a*c;
-    
-    if (discriminant < 0.0) {
-        return -1.0;
-    } else {
-        return (-b - sqrt(discriminant)) / (2.0 * a);
+    float h = dot(r.direction, oc);
+    float c = dot(oc, oc) - sphere.radius * sphere.radius;
+
+    float discriminant = h*h - a*c;
+    if (discriminant < 0) {
+        return false;
     }
+    float sqrtd = sqrt(discriminant);
+
+    // Find the nearest root that lies in the acceptable range.
+    float root = (h - sqrtd) / a;
+    if (root <= ray_tmin || ray_tmax <= root) {
+        root = (h + sqrtd) / a;
+        if (root <= ray_tmin || ray_tmax <= root)
+            return false;
+    }
+
+    rec.t = root;
+    rec.p = ray_at(r, rec.t);
+    rec.normal = (rec.p - sphere.center) / sphere.radius;
+
+    return true;
 }
 
 vec3 ray_color(in Ray r) {
-    float t = hit_sphere(vec3(0.0, 0.0, -1.0), 0.5, r);
-    if (t > 0.0) {
-        vec3 N = normalize(ray_at(r, t) - vec3(0.0, 0.0, -1.0));
+    HitRecord rec = HitRecord(vec3(0.0), vec3(0.0), 0.0);
+    bool t = sphere_hit(Sphere(vec3(0.0, 0.0, -1.0), 0.5), r, 0.0, 99999.0, rec);
+    if (t) {
+        vec3 N = rec.normal;
         return 0.5 * (N + 1.0);
     }
     vec3 unit_direction = normalize(r.direction);
