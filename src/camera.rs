@@ -9,18 +9,13 @@ pub enum CameraMovement {
 
 pub struct Camera {
     // Vectors
-    pub position: glm::Vec3,
-    front: glm::Vec3,
-    up: glm::Vec3,
-    right: glm::Vec3,
-    world_up: glm::Vec3,
-    // Angles
-    yaw: f32,
-    pitch: f32,
-    // Camera Options
-    movement_speed: f32,
-    mouse_sensitivity: f32,
-    _zoom: f32,
+    pub aspect_ratio: f32,
+    pub image_width: f32,
+    pub image_height: f32,
+    pub center: glm::Vec3,
+    pub pixel00_loc: glm::Vec3,
+    pub pixel_delta_u: glm::Vec3,
+    pub pixel_delta_v: glm::Vec3,
 }
 
 impl Camera {
@@ -30,63 +25,68 @@ impl Camera {
     const MOUSE_SENSITIVITY: f32 = 0.1;
     const ZOOM: f32 = 45.0;
 
-    pub fn get_view_matrix(&self) -> glm::Mat4 {
-        glm::look_at(&self.position, &(self.position + self.front), &self.up)
-    }
+    // pub fn get_view_matrix(&self) -> glm::Mat4 {
+    //     glm::look_at(&self.position, &(self.position + self.front), &self.up)
+    // }
 
-    pub fn new(position: glm::Vec3, up: glm::Vec3, yaw: f32, pitch: f32) -> Self {
-        let world_up = up;
+    pub fn new(aspect_ratio: f32, image_width: f32) -> Self {
+        let image_height = image_width / aspect_ratio;
+        let center = glm::vec3(0.0, 0.0, 0.0);
 
-        let front = Self::calculate_front_vector(pitch, yaw);
-        let right = glm::normalize(&glm::cross(&front, &world_up));
-        let up = glm::normalize(&glm::cross(&right, &front));
+        // Viewport dimensions
+        let focal_length = 1.0;
+        let viewport_height = 2.0;
+        let viewport_width = viewport_height * aspect_ratio;
 
-        let movement_speed = Self::MOVEMENT_SPEED;
-        let mouse_sensitivity = Self::MOUSE_SENSITIVITY;
-        let zoom = Self::ZOOM;
+        // Vectors across the viewport edges
+        let viewport_u = glm::vec3(viewport_width, 0.0, 0.0);
+        let viewport_v = glm::vec3(0.0, -viewport_height, 0.0);
+
+        // Horizontal and vertical delta vectors from pixel to pixel
+        let pixel_delta_u = viewport_u / image_width;
+        let pixel_delta_v = viewport_v / image_height;
+
+        // Calcualte the location of the upper left pixel.
+        let viewport_upper_left = center - glm::vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
+        let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
         Self {
-            position,
-            front,
-            up,
-            right,
-            world_up,
-
-            yaw,
-            pitch,
-
-            movement_speed,
-            mouse_sensitivity,
-            _zoom: zoom,
+            aspect_ratio,
+            image_width,
+            image_height,
+            center,
+            pixel00_loc,
+            pixel_delta_u,
+            pixel_delta_v,
         }
     }
 
     pub fn process_keyboard(&mut self, direction: CameraMovement, delta_time: f32) {
-        let velocity = self.movement_speed * delta_time;
+        // let velocity = self.movement_speed * delta_time;
 
-        match direction {
-            CameraMovement::FORWARD => self.position += self.front * velocity,
-            CameraMovement::BACKWARD => self.position -= self.front * velocity,
-            CameraMovement::LEFT => self.position -= self.right * velocity,
-            CameraMovement::RIGHT => self.position += self.right * velocity,
-        }
+        // match direction {
+        //     CameraMovement::FORWARD => self.center += self.front * velocity,
+        //     CameraMovement::BACKWARD => self.center -= self.front * velocity,
+        //     CameraMovement::LEFT => self.center -= self.right * velocity,
+        //     CameraMovement::RIGHT => self.center += self.right * velocity,
+        // }
     }
 
     pub fn process_mouse_movements(&mut self, x_offset: f32, y_offset: f32) {
-        self.yaw += x_offset * self.mouse_sensitivity;
-        self.pitch += y_offset * self.mouse_sensitivity;
+        // self.yaw += x_offset * self.mouse_sensitivity;
+        // self.pitch += y_offset * self.mouse_sensitivity;
 
-        self.pitch = self.pitch.clamp(-89.0, 89.0);
+        // self.pitch = self.pitch.clamp(-89.0, 89.0);
 
-        self.front = Self::calculate_front_vector(self.pitch, self.yaw);
-        self.right = glm::normalize(&glm::cross(&self.front, &self.world_up));
-        self.up = glm::normalize(&glm::cross(&self.right, &self.front));
+        // self.front = Self::calculate_front_vector(self.pitch, self.yaw);
+        // self.right = glm::normalize(&glm::cross(&self.front, &self.world_up));
+        // self.up = glm::normalize(&glm::cross(&self.right, &self.front));
     }
 
-    pub fn _process_mouse_scroll(&mut self, y_offset: f32) {
-        self._zoom -= y_offset;
-        self._zoom = self._zoom.clamp(1.0, 45.0);
-    }
+    // pub fn _process_mouse_scroll(&mut self, y_offset: f32) {
+    //     self._zoom -= y_offset;
+    //     self._zoom = self._zoom.clamp(1.0, 45.0);
+    // }
 
     fn calculate_front_vector(pitch: f32, yaw: f32) -> glm::Vec3 {
         let (pitch, yaw) = (pitch.to_radians(), yaw.to_radians());
@@ -101,35 +101,36 @@ impl Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        let position = glm::vec3(0.0, 0.0, 2.0);
-        let world_up = glm::vec3(0.0, 1.0, 0.0);
+        let aspect_ratio = 16.0 / 9.0;
+        let image_width = 800.0;
+        let image_height = image_width / aspect_ratio;
+        let center = glm::vec3(0.0, 0.0, 0.0);
 
-        let yaw = Self::YAW;
-        let pitch = Self::PITCH;
+        // Viewport dimensions
+        let focal_length = 1.0;
+        let viewport_height = 2.0;
+        let viewport_width = viewport_height * aspect_ratio;
 
-        let front = Self::calculate_front_vector(pitch, yaw);
-        let right = glm::normalize(&glm::cross(&front, &world_up));
-        let up = glm::normalize(&glm::cross(&right, &front));
+        // Vectors across the viewport edges
+        let viewport_u = glm::vec3(viewport_width, 0.0, 0.0);
+        let viewport_v = glm::vec3(0.0, -viewport_height, 0.0);
 
-        let movement_speed = Self::MOVEMENT_SPEED;
-        let mouse_sensitivity = Self::MOUSE_SENSITIVITY;
-        let zoom = Self::ZOOM;
-        // let direction = glm::normalize(&(position - target));
-        // let right = glm::normalize(&glm::cross(&up, &direction));
+        // Horizontal and vertical delta vectors from pixel to pixel
+        let pixel_delta_u = viewport_u / image_width;
+        let pixel_delta_v = viewport_v / image_height;
+
+        // Calcualte the location of the upper left pixel.
+        let viewport_upper_left = center - glm::vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
+        let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
         Self {
-            position,
-            front,
-            up,
-            right,
-            world_up,
-
-            yaw,
-            pitch,
-
-            movement_speed,
-            mouse_sensitivity,
-            _zoom: zoom,
+            aspect_ratio,
+            image_width,
+            image_height,
+            center,
+            pixel00_loc,
+            pixel_delta_u,
+            pixel_delta_v,
         }
     }
 }

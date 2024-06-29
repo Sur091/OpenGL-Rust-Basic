@@ -2,13 +2,20 @@
 
 
 in vec4 vertex_uv;
-// in vec2 vertex_texture_coord;
 
 layout(location=0) out vec4 color;
 
-uniform vec2 u_resolution;
-uniform float u_aspect_ratio;
 
+struct Camera {
+    float aspect_ratio, image_width, image_height;
+    vec3 center, pixel00_loc, pixel_delta_u, pixel_delta_v;
+};
+
+uniform Camera u_camera;
+
+vec2 uv = vertex_uv.xy / 2.0 + 0.5;
+float i = uv.x * u_camera.image_width;
+float j = (1.0 - uv.y) * u_camera.image_height;
 
 struct Ray {
     vec3 origin;
@@ -17,6 +24,16 @@ struct Ray {
 
 vec3 ray_at(in Ray ray, float t) {
     return ray.origin + t * ray.direction;
+}
+
+float random (vec2 st) {
+    return fract(sin(dot(st.xy,
+                         vec2(12.9898,78.233)))*
+        43758.5453123);
+}
+
+float random(float x) {
+    return fract(sin(x) * 43758.5453123);
 }
 
 struct HitRecord {
@@ -39,6 +56,8 @@ struct Interval {
 const float INFINITY = 65500.0; 
 const Interval EMPTY = Interval(INFINITY, -INFINITY);
 const Interval UNIVERSE = Interval(-INFINITY, INFINITY);
+const int samples_per_pixel = 10;
+const float pixel_samples_scale = 1.0 / float(samples_per_pixel);
 
 
 struct Sphere {
@@ -108,39 +127,32 @@ vec3 ray_color(in Ray r, in HittableList world) {
     return (1.0 - a) * vec3(1.0) + a * vec3(0.5, 0.7, 1.0);
 }
 
-void main()
-{   
-    vec2 uv = vec2(vertex_uv.x * u_aspect_ratio, vertex_uv.y);
 
+Ray get_ray() {
+    vec3 pixel_center = u_camera.pixel00_loc + (i * u_camera.pixel_delta_u) + (j * u_camera.pixel_delta_v);
+    vec3 ray_direction = pixel_center - u_camera.center;
+    return Ray(u_camera.center, ray_direction);
+}
+
+vec3 render(in HittableList world) {
+    
+    vec3 pixel_color = vec3(0.0);
+    for (int i =0; i < samples_per_pixel; i++) {
+        Ray r = get_ray();
+        pixel_color += ray_color(r, world);
+    }
+    return pixel_color * pixel_samples_scale;
+}
+
+void main()
+{  
     // World
 
     HittableList world;
     world.spheres[0] = Sphere(vec3(0.0, 0.0, -1.0), 0.5);
     world.spheres[1] = Sphere(vec3(0.0, -100.5, -1.0), 100.0);
 
-    // Camera
-    float focal_length = 1.0;
-    float viewport_height = 2.0;
-    float viewport_width = viewport_height * u_resolution.x / u_resolution.y;
-    vec3 camera_center = vec3(0.0);
-
-    // vectors across the horzontal and down the vertical viewport edges.
-    vec3 viewport_u = vec3(viewport_width, 0.0, 0.0);
-    vec3 viewport_v = vec3(0.0, -viewport_height, 0.0);
-
-    // horizontal and vertical delta vectors from pixel to pixel
-    // vec3 pixel_delta_u = viewport_u / image_width;
-
-    vec3 viewport_upper_left = camera_center - vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
-    // vec3 pixel00_loc = vec3()
-    
-    
-    vec3 pixel_center = vec3(uv.xy, viewport_upper_left.z);
-    vec3 ray_direction = pixel_center - camera_center;
-
-    Ray r = Ray(camera_center, ray_direction);
-
-    vec3 pixel_color = ray_color(r, world);
+    vec3 pixel_color = render(world);
 
     color = vec4(pixel_color, 1.0);
 }
