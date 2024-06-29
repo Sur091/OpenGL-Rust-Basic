@@ -30,7 +30,17 @@ void hit_record_set_front_face(inout HitRecord hit_record, in Ray r, in vec3 out
     hit_record.front_face = dot(r.direction, outward_normal) < 0.0;
     hit_record.normal = hit_record.front_face ? outward_normal: -outward_normal;
 }
-`
+
+struct Interval {
+    float min, max;
+};
+// I believe that 65504.0 is the maximum number for a 16-bit float. I didn't choose infinity because I am no sure if the representation changes with the precision.
+// Basically, I need to reasearch more. But I don't want to.
+const float INFINITY = 65500.0; 
+const Interval EMPTY = Interval(INFINITY, -INFINITY);
+const Interval UNIVERSE = Interval(-INFINITY, INFINITY);
+
+
 struct Sphere {
     vec3 center;
     float radius;
@@ -42,7 +52,7 @@ struct HittableList {
     Sphere spheres[2];
 };
 
-bool sphere_hit(in Sphere sphere, in Ray r, float ray_tmin, float ray_tmax, inout HitRecord rec) {
+bool sphere_hit(in Sphere sphere, in Ray r, Interval ray_t, inout HitRecord rec) {
     vec3 oc = sphere.center - r.origin;
     float a = dot(r.direction, r.direction);
     float h = dot(r.direction, oc);
@@ -56,9 +66,9 @@ bool sphere_hit(in Sphere sphere, in Ray r, float ray_tmin, float ray_tmax, inou
 
     // Find the nearest root that lies in the acceptable range.
     float root = (h - sqrtd) / a;
-    if (root <= ray_tmin || ray_tmax <= root) {
+    if (root < ray_t.min || ray_t.max < root) {
         root = (h + sqrtd) / a;
-        if (root <= ray_tmin || ray_tmax <= root)
+        if (root < ray_t.min || ray_t.max < root)
             return false;
     }
 
@@ -70,13 +80,13 @@ bool sphere_hit(in Sphere sphere, in Ray r, float ray_tmin, float ray_tmax, inou
     return true;
 }
 
-bool hittable_list_hit(inout HittableList hittable_list, in Ray r, float ray_tmin, float ray_tmax, inout HitRecord rec) {
+bool hittable_list_hit(inout HittableList hittable_list, in Ray r, Interval ray_t, inout HitRecord rec) {
     HitRecord temp_rec = HitRecord(vec3(0.0), vec3(0.0), 0.0, false);
     bool hit_anything = false;
-    float closest_so_far = ray_tmax;
+    float closest_so_far = ray_t.max;
 
     for (int i = 0; i < number_of_spheres; i++) {
-        if (sphere_hit(hittable_list.spheres[i], r, ray_tmin, closest_so_far, temp_rec)) {
+        if (sphere_hit(hittable_list.spheres[i], r, Interval(ray_t.min, closest_so_far), temp_rec)) {
             hit_anything = true;
             closest_so_far = temp_rec.t;
             rec = temp_rec;
@@ -88,7 +98,7 @@ bool hittable_list_hit(inout HittableList hittable_list, in Ray r, float ray_tmi
 
 vec3 ray_color(in Ray r, in HittableList world) {
     HitRecord rec = HitRecord(vec3(0.0), vec3(0.0), 0.0, false);
-    bool t = hittable_list_hit(world, r, 0.0, 99999.0, rec);
+    bool t = hittable_list_hit(world, r, Interval(0.0, INFINITY), rec);
     if (t) {
         vec3 N = rec.normal;
         return 0.5 * (N + 1.0);

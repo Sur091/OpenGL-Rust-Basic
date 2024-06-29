@@ -217,7 +217,7 @@ impl Renderer {
         let model = glm::identity();
         self.shader.set_uniform_mat4f("u_model", &model);
 
-        self.shader.set_uniform_2f("u_resolution", 2.0, 2.0);
+        self.shader.set_uniform_2f("u_resolution",  800.0, 450.0);
         self.shader.set_uniform_1f("u_aspect_ratio", 16.0 / 9.0);
         self.vertex_array.bind();
         self.index_buffer.bind();
