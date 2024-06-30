@@ -206,7 +206,7 @@ impl Renderer {
         unsafe { gl::DrawArrays(gl::TRIANGLES, 0, Self::VERTICES.len() as i32) }
     }
 
-    pub fn draw(&mut self) {
+    pub fn draw(&mut self, time: f32) {
         self.clear();
                 
         self.shader.bind();
@@ -227,6 +227,7 @@ impl Renderer {
         self.shader.set_uniform_1f("u_camera.aspect_ratio", self.camera.aspect_ratio);
         self.shader.set_uniform_1f("u_camera.image_width", self.camera.image_width);
         self.shader.set_uniform_1f("u_camera.image_height", self.camera.image_height);
+        self.shader.set_uniform_1f("u_time", time);
         self.vertex_array.bind();
         self.index_buffer.bind();
         self.draw_elements();

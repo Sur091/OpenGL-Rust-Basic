@@ -11,6 +11,7 @@ pub struct App {
     // NOTE: `AppState` carries the `Window`, thus it should be dropped after everything else.
     state: Option<AppState>,
     last_frame: std::time::Instant,
+    initial_time: std::time::Instant,
     last_mouse: Option<winit::dpi::PhysicalPosition<f32>>,
     cursor_locked: bool,
 }
@@ -33,6 +34,7 @@ impl App {
             state: None,
             renderer: None,
             last_frame: std::time::Instant::now(),
+            initial_time: std::time::Instant::now(),
             last_mouse: None,
             cursor_locked: false,
         }
@@ -317,12 +319,15 @@ impl winit::application::ApplicationHandler for App {
             window,
         }) = self.state.as_ref()
         {
-            let renderer = self.renderer.as_mut().unwrap();
-            renderer.draw();
             self.last_frame = std::time::Instant::now();
+            let renderer = self.renderer.as_mut().unwrap();
+            
+            renderer.draw(self.initial_time.elapsed().as_secs_f32()*1000.0);
             window.request_redraw();
-
+            
             gl_surface.swap_buffers(gl_context).unwrap();
+            let delta_time = self.last_frame.elapsed().as_secs_f32()*1000.0;
+            println!("{}", delta_time);
         }
     }
 }

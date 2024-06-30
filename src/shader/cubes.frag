@@ -12,10 +12,13 @@ struct Camera {
 };
 
 uniform Camera u_camera;
+uniform float u_time;
 
 vec2 uv = vertex_uv.xy / 2.0 + 0.5;
 float i = uv.x * u_camera.image_width;
 float j = (1.0 - uv.y) * u_camera.image_height;
+
+const float PI = 3.141593;
 
 struct Ray {
     vec3 origin;
@@ -32,8 +35,41 @@ float random (vec2 st) {
         43758.5453123);
 }
 
+float seed = 2334.3594;
 float random(float x) {
-    return fract(sin(x) * 43758.5453123);
+    seed = fract(sin(seed + u_time + x) * 43758.5453123);
+    return seed;
+}
+
+
+vec3 random_unit_vector(vec2 rand) {
+    rand = vec2(random(rand.x), random(rand.y)) * 2.0 - 1.0;
+    float ang1 = (rand.x + 1.0) * PI; // [-1..1) -> [0..2*PI)
+    float u = rand.y; // [-1..1), cos and acos(2v-1) cancel each other out, so we arrive at [-1..1)
+    float u2 = u * u;
+    float sqrt1MinusU2 = sqrt(1.0 - u2);
+    float x = sqrt1MinusU2 * cos(ang1);
+    float y = sqrt1MinusU2 * sin(ang1);
+    float z = u;
+    return vec3(x, y, z);
+}
+
+vec3 random_sphere_point(vec2 rand) {
+    rand = vec2(random(random(rand.x)), random(random(rand.y))) * 2.0 - 1.0;
+    float angle1 = (rand.x + 1.0) * PI;
+    float u = rand.y;
+    float sqrt1_minus_u2 = sqrt(1.0 - u * u);
+    float x = sqrt1_minus_u2 * cos(angle1);
+    float y = sqrt1_minus_u2 * sin(angle1);
+    return vec3(x, y, u);
+}
+
+vec3 random_on_hemisphere(float seed, vec3 normal) {
+    vec3 on_unit_sphere = random_sphere_point(vec2(i*seed, j*seed));
+    if (dot(on_unit_sphere, normal) > 0.0) {
+        return on_unit_sphere;
+    } 
+    return -on_unit_sphere;
 }
 
 struct HitRecord {
@@ -56,7 +92,8 @@ struct Interval {
 const float INFINITY = 65500.0; 
 const Interval EMPTY = Interval(INFINITY, -INFINITY);
 const Interval UNIVERSE = Interval(-INFINITY, INFINITY);
-const int samples_per_pixel = 10;
+const int samples_per_pixel = 100;
+const int max_depth = 50;
 const float pixel_samples_scale = 1.0 / float(samples_per_pixel);
 
 
@@ -71,6 +108,12 @@ struct HittableList {
     Sphere spheres[2];
 };
 
+const HittableList world = HittableList(
+    Sphere[2](
+        Sphere(vec3(0.0, 0.0, -1.0), 0.5),
+        Sphere(vec3(0.0, -100.5, -1.0), 100.0))
+);
+
 bool sphere_hit(in Sphere sphere, in Ray r, Interval ray_t, inout HitRecord rec) {
     vec3 oc = sphere.center - r.origin;
     float a = dot(r.direction, r.direction);
@@ -78,7 +121,7 @@ bool sphere_hit(in Sphere sphere, in Ray r, Interval ray_t, inout HitRecord rec)
     float c = dot(oc, oc) - sphere.radius * sphere.radius;
 
     float discriminant = h*h - a*c;
-    if (discriminant < 0) {
+    if (discriminant < 0.0) {
         return false;
     }
     float sqrtd = sqrt(discriminant);
@@ -99,13 +142,13 @@ bool sphere_hit(in Sphere sphere, in Ray r, Interval ray_t, inout HitRecord rec)
     return true;
 }
 
-bool hittable_list_hit(inout HittableList hittable_list, in Ray r, Interval ray_t, inout HitRecord rec) {
+bool world_hit(in Ray r, Interval ray_t, inout HitRecord rec) {
     HitRecord temp_rec = HitRecord(vec3(0.0), vec3(0.0), 0.0, false);
     bool hit_anything = false;
     float closest_so_far = ray_t.max;
 
     for (int i = 0; i < number_of_spheres; i++) {
-        if (sphere_hit(hittable_list.spheres[i], r, Interval(ray_t.min, closest_so_far), temp_rec)) {
+        if (sphere_hit(world.spheres[i], r, Interval(ray_t.min, closest_so_far), temp_rec)) {
             hit_anything = true;
             closest_so_far = temp_rec.t;
             rec = temp_rec;
@@ -115,31 +158,49 @@ bool hittable_list_hit(inout HittableList hittable_list, in Ray r, Interval ray_
     return hit_anything;
 }
 
-vec3 ray_color(in Ray r, in HittableList world) {
+vec3 ray_color(in Ray r) {
     HitRecord rec = HitRecord(vec3(0.0), vec3(0.0), 0.0, false);
-    bool t = hittable_list_hit(world, r, Interval(0.0, INFINITY), rec);
-    if (t) {
-        vec3 N = rec.normal;
-        return 0.5 * (N + 1.0);
+    float hit = 1.0;
+    for (int k = 0; k < max_depth; k++) {
+        if (world_hit(r, Interval(0.001, INFINITY), rec)) {
+            vec3 direction = random_on_hemisphere(float(k), rec.normal);
+            r = Ray(rec.p, direction);
+            hit *= 0.5;
+        } else {
+            break;
+        }
     }
     vec3 unit_direction = normalize(r.direction);
     float a = 0.5 * (unit_direction.y + 1.0);
-    return (1.0 - a) * vec3(1.0) + a * vec3(0.5, 0.7, 1.0);
+    vec3 sky_color = vec3(0.5, 0.7, 1.0);
+    vec3 color = (1.0 - a) * vec3(1.0) + a * sky_color;
+    return  color * hit;
 }
 
+vec3 sample_square(float seed) {
+    seed = random(seed);
+    return vec3(random(uv.x + seed) - 0.5, random(uv.y + seed * seed) - 0.5, 0.0);
+}
 
-Ray get_ray() {
-    vec3 pixel_center = u_camera.pixel00_loc + (i * u_camera.pixel_delta_u) + (j * u_camera.pixel_delta_v);
-    vec3 ray_direction = pixel_center - u_camera.center;
-    return Ray(u_camera.center, ray_direction);
+Ray get_ray(float seed) {
+    vec3 offset = sample_square(seed);
+    vec3 pixel_sample = u_camera.pixel00_loc
+                        + (i + offset.x) * u_camera.pixel_delta_u
+                        + (j + offset.y) * u_camera.pixel_delta_v;
+    vec3 ray_direction = pixel_sample - u_camera.center;
+
+    return Ray(
+        u_camera.center,
+        ray_direction
+    );
 }
 
 vec3 render(in HittableList world) {
     
     vec3 pixel_color = vec3(0.0);
-    for (int i =0; i < samples_per_pixel; i++) {
-        Ray r = get_ray();
-        pixel_color += ray_color(r, world);
+    for (int k = 0; k < samples_per_pixel; k++) {
+        Ray r = get_ray(float(k)+j);
+        pixel_color += ray_color(r);
     }
     return pixel_color * pixel_samples_scale;
 }
@@ -148,11 +209,10 @@ void main()
 {  
     // World
 
-    HittableList world;
-    world.spheres[0] = Sphere(vec3(0.0, 0.0, -1.0), 0.5);
-    world.spheres[1] = Sphere(vec3(0.0, -100.5, -1.0), 100.0);
+    // world.spheres(Sphere(vec3(0.0, 0.0, -1.0), 0.5), Sphere(vec3(0.0, -100.5, -1.0), 100.0));
+
 
     vec3 pixel_color = render(world);
 
-    color = vec4(pixel_color, 1.0);
+    color = vec4(pixel_color  , 1.0);
 }
