@@ -165,7 +165,7 @@ vec3 ray_color(in Ray r) {
         if (world_hit(r, Interval(0.001, INFINITY), rec)) {
             vec3 direction = random_on_hemisphere(float(k), rec.normal);
             r = Ray(rec.p, direction);
-            hit *= 0.5;
+            hit *= 0.7;
         } else {
             break;
         }
@@ -214,5 +214,5 @@ void main()
 
     vec3 pixel_color = render(world);
 
-    color = vec4(pixel_color  , 1.0);
+    color = vec4(pixel_color, 1.0);
 }
