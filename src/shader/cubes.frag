@@ -72,12 +72,60 @@ vec3 random_on_hemisphere(float seed, vec3 normal) {
     return -on_unit_sphere;
 }
 
+// Lambertian = Material.albedo.w < 0.001
+// Metal = Material.albedo.w > 0.001
+// Dielectric = Material.albedo.x > 1.001
+// Note check for Dielectric first.
+struct Material {
+    vec4 albedo;
+};
+
+
 struct HitRecord {
     vec3 p;
     vec3 normal;
     float t;
     bool front_face;
+    Material material;
 };
+
+bool near_zero(vec3 point) {
+    float delta = 0.001;
+    vec3 positive_point = abs(point);
+    return (positive_point.x < delta && positive_point.y < delta && positive_point.z < delta);
+}
+
+// Lambertian = Material.albedo.w < 0.001
+// Metal = Material.albedo.w > 0.001
+// Dielectric = Material.albedo.x > 1.001
+// Note check for Dielectric first.
+
+bool material_scatter(inout Ray r_in, in HitRecord rec, out vec3 attenuation, out Ray scattered, float seed) {
+    // Condition for dielectric
+    if (rec.material.albedo.x > 1.001) {
+        return false;
+    }
+
+    // Condition for Lambertian
+    if (rec.material.albedo.w < -0.5) {
+        vec3 scatter_direction = rec.normal + random_sphere_point(vec2(seed + u_time, seed * seed + u_time));
+
+        if (near_zero(scatter_direction)) {
+            scatter_direction = rec.normal;
+        }
+        scattered = Ray(rec.p, scatter_direction);
+        attenuation = rec.material.albedo.xyz;
+        return true;
+    }
+
+    // Condition for Metal
+    vec3 reflected = reflect(r_in.direction, rec.normal);
+    reflected = normalize(reflected) + (rec.material.albedo.w * random_sphere_point(vec2(seed + u_time, seed * seed + u_time)));
+    scattered = Ray(rec.p, reflected);
+    attenuation = rec.material.albedo.xyz;
+    return dot(scattered.direction, rec.normal) > 0.0;
+}
+
 
 void hit_record_set_front_face(inout HitRecord hit_record, in Ray r, in vec3 outward_normal) {
     hit_record.front_face = dot(r.direction, outward_normal) < 0.0;
@@ -100,21 +148,29 @@ const float pixel_samples_scale = 1.0 / float(samples_per_pixel);
 struct Sphere {
     vec3 center;
     float radius;
+    Material mat;
 };
 
-const int number_of_spheres = 2;
+const int number_of_spheres = 4;
 
 struct HittableList {
-    Sphere spheres[2];
+    Sphere spheres[number_of_spheres];
 };
 
+const Material material_ground = Material(vec4(0.8, 0.8, 0.0, -1.0));
+const Material material_center = Material(vec4(0.1, 0.2, 0.5, -1.0));
+const Material material_left   = Material(vec4(0.8, 0.8, 0.8, 0.3));
+const Material material_right  = Material(vec4(0.8, 0.6, 0.2, 1.0));
 const HittableList world = HittableList(
-    Sphere[2](
-        Sphere(vec3(0.0, 0.0, -1.0), 0.5),
-        Sphere(vec3(0.0, -100.5, -1.0), 100.0))
+    Sphere[number_of_spheres](
+        Sphere(vec3( 0.0, -100.5, -1.0), 100.0, material_ground),
+        Sphere(vec3( 0.0,    0.0, -1.2),   0.5, material_center),
+        Sphere(vec3(-1.0,    0.0, -1.0),   0.5, material_left),
+        Sphere(vec3( 1.0,    0.0, -1.0),   0.5, material_right)
+    )
 );
 
-bool sphere_hit(in Sphere sphere, in Ray r, Interval ray_t, inout HitRecord rec) {
+bool sphere_hit(in Sphere sphere, in Ray r, Interval ray_t, out HitRecord rec) {
     vec3 oc = sphere.center - r.origin;
     float a = dot(r.direction, r.direction);
     float h = dot(r.direction, oc);
@@ -136,14 +192,15 @@ bool sphere_hit(in Sphere sphere, in Ray r, Interval ray_t, inout HitRecord rec)
 
     rec.t = root;
     rec.p = ray_at(r, rec.t);
+    rec.material = sphere.mat;
     vec3 outward_normal = (rec.p - sphere.center) / sphere.radius;
     hit_record_set_front_face(rec, r, outward_normal);
 
     return true;
 }
 
-bool world_hit(in Ray r, Interval ray_t, inout HitRecord rec) {
-    HitRecord temp_rec = HitRecord(vec3(0.0), vec3(0.0), 0.0, false);
+bool world_hit(in Ray r, Interval ray_t, out HitRecord rec) {
+    HitRecord temp_rec;
     bool hit_anything = false;
     float closest_so_far = ray_t.max;
 
@@ -159,13 +216,18 @@ bool world_hit(in Ray r, Interval ray_t, inout HitRecord rec) {
 }
 
 vec3 ray_color(in Ray r) {
-    HitRecord rec = HitRecord(vec3(0.0), vec3(0.0), 0.0, false);
-    float hit = 1.0;
+    HitRecord rec;
+    vec3 hit = vec3(1.0);
     for (int k = 0; k < max_depth; k++) {
         if (world_hit(r, Interval(0.001, INFINITY), rec)) {
-            vec3 direction = random_on_hemisphere(float(k), rec.normal);
-            r = Ray(rec.p, direction);
-            hit *= 0.7;
+            Ray scattered;
+            vec3 attenuation;
+            if (material_scatter(r, rec, attenuation, scattered, float(k) * u_time / float(max_depth) * 0.1)) {
+                hit *= attenuation;
+            } else {
+                hit *= vec3(0.0);
+            }
+            r = scattered;
         } else {
             break;
         }
@@ -214,5 +276,5 @@ void main()
 
     vec3 pixel_color = render(world);
 
-    color = vec4(pixel_color, 1.0);
+    color = vec4(sqrt(pixel_color), 1.0);
 }
