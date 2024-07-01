@@ -158,8 +158,11 @@ impl winit::application::ApplicationHandler for App {
         // The context needs to be current for the Renderer to set up shaders and
         // buffers. It also performs function loading, which needs a current context on
         // WGL.
+        let size = window.inner_size();
+        let aspect_ratio = size.width as f32 / size.height as f32;
+        let image_width = size.width as f32;
         self.renderer
-            .get_or_insert_with(|| Renderer::new(&gl_display));
+            .get_or_insert_with(|| Renderer::new(&gl_display, aspect_ratio, image_width));
 
         // Try setting vsync.
         if let Err(res) = gl_surface.set_swap_interval(

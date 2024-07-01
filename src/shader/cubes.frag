@@ -140,7 +140,7 @@ struct Interval {
 const float INFINITY = 65500.0; 
 const Interval EMPTY = Interval(INFINITY, -INFINITY);
 const Interval UNIVERSE = Interval(-INFINITY, INFINITY);
-const int samples_per_pixel = 100;
+const int samples_per_pixel = 500;
 const int max_depth = 50;
 const float pixel_samples_scale = 1.0 / float(samples_per_pixel);
 

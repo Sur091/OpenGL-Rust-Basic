@@ -92,7 +92,7 @@ impl Renderer {
         v.to_str().unwrap()
     }
 
-    pub fn new(gl_display: &glutin::display::Display) -> Self {
+    pub fn new(gl_display: &glutin::display::Display, aspect_ratio: f32, image_width: f32) -> Self {
         use glutin::display::GlDisplay;
 
         gl::load_with(|symbol| {
@@ -150,7 +150,7 @@ impl Renderer {
         vertex_array.unbind();
         index_buffer.unbind();
 
-        let camera = Camera::default();
+        let camera = Camera::new(aspect_ratio, image_width);
 
         Self::clear_color(Color(0.0, 0.0, 0.0, 1.0));
 
