@@ -150,7 +150,7 @@ impl Renderer {
         vertex_array.unbind();
         index_buffer.unbind();
 
-        let camera = Camera::new(aspect_ratio, image_width);
+        let camera = Camera::new(aspect_ratio, image_width, 90.0);
 
         Self::clear_color(Color(0.0, 0.0, 0.0, 1.0));
 
@@ -227,7 +227,8 @@ impl Renderer {
         self.shader.set_uniform_1f("u_camera.aspect_ratio", self.camera.aspect_ratio);
         self.shader.set_uniform_1f("u_camera.image_width", self.camera.image_width);
         self.shader.set_uniform_1f("u_camera.image_height", self.camera.image_height);
-        self.shader.set_uniform_1f("u_time", time);
+        self.shader.set_uniform_1f("u_camera.vfov", self.camera.vfov);
+        self.shader.set_uniform_1f("u_time", ((time*1000.0) % 1000.0)/1000.0);
         self.vertex_array.bind();
         self.index_buffer.bind();
         self.draw_elements();

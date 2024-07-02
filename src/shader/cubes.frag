@@ -7,7 +7,7 @@ layout(location=0) out vec4 color;
 
 
 struct Camera {
-    float aspect_ratio, image_width, image_height;
+    float aspect_ratio, image_width, image_height, vfov;
     vec3 center, pixel00_loc, pixel_delta_u, pixel_delta_v;
 };
 
@@ -95,15 +95,38 @@ bool near_zero(vec3 point) {
     return (positive_point.x < delta && positive_point.y < delta && positive_point.z < delta);
 }
 
-// Lambertian = Material.albedo.w < 0.001
+// Lambertian = Material.albedo.w < -0.5
 // Metal = Material.albedo.w > 0.001
 // Dielectric = Material.albedo.x > 1.001
 // Note check for Dielectric first.
 
+float reflectance(float cosine, float refraction_index) {
+    // Use Schlick's approximation for reflectance.
+    float r0 = (1 - refraction_index) / (1 + refraction_index);
+    r0 = r0*r0;
+    return r0 + (1-r0)*pow((1 - cosine),5);
+}
+
 bool material_scatter(inout Ray r_in, in HitRecord rec, out vec3 attenuation, out Ray scattered, float seed) {
     // Condition for dielectric
     if (rec.material.albedo.x > 1.001) {
-        return false;
+        attenuation = vec3(1.0);
+        float ri = rec.front_face ? (1.0 / rec.material.albedo.w): rec.material.albedo.w;
+
+        vec3 unit_direction = normalize(r_in.direction);
+        float cos_theta = min(dot(-unit_direction, rec.normal), 1.0);
+        float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+
+        bool cannot_relfract = (ri * sin_theta) > 1.0;
+        vec3 direction;
+        if (cannot_relfract || reflectance(cos_theta, ri) > random(3.0 * seed)) {
+            direction = reflect(unit_direction, rec.normal);
+        }  else {
+            direction = refract(unit_direction, rec.normal, ri);
+        }
+
+        scattered = Ray(rec.p, direction);
+        return true;
     }
 
     // Condition for Lambertian
@@ -140,7 +163,7 @@ struct Interval {
 const float INFINITY = 65500.0; 
 const Interval EMPTY = Interval(INFINITY, -INFINITY);
 const Interval UNIVERSE = Interval(-INFINITY, INFINITY);
-const int samples_per_pixel = 500;
+const int samples_per_pixel = 100;
 const int max_depth = 50;
 const float pixel_samples_scale = 1.0 / float(samples_per_pixel);
 
@@ -151,7 +174,7 @@ struct Sphere {
     Material mat;
 };
 
-const int number_of_spheres = 4;
+const int number_of_spheres = 5;
 
 struct HittableList {
     Sphere spheres[number_of_spheres];
@@ -159,13 +182,15 @@ struct HittableList {
 
 const Material material_ground = Material(vec4(0.8, 0.8, 0.0, -1.0));
 const Material material_center = Material(vec4(0.1, 0.2, 0.5, -1.0));
-const Material material_left   = Material(vec4(0.8, 0.8, 0.8, 0.3));
+const Material material_left   = Material(vec4(2.0, 0.0, 0.0, 1.5));
+const Material material_bubble = Material(vec4(2.0, 0.0, 0.0, 1.0 / 1.5));
 const Material material_right  = Material(vec4(0.8, 0.6, 0.2, 1.0));
 const HittableList world = HittableList(
     Sphere[number_of_spheres](
         Sphere(vec3( 0.0, -100.5, -1.0), 100.0, material_ground),
         Sphere(vec3( 0.0,    0.0, -1.2),   0.5, material_center),
         Sphere(vec3(-1.0,    0.0, -1.0),   0.5, material_left),
+        Sphere(vec3(-1.0,    0.0, -1.0),   0.4, material_bubble),
         Sphere(vec3( 1.0,    0.0, -1.0),   0.5, material_right)
     )
 );

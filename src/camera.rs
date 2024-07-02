@@ -16,6 +16,7 @@ pub struct Camera {
     pub pixel00_loc: glm::Vec3,
     pub pixel_delta_u: glm::Vec3,
     pub pixel_delta_v: glm::Vec3,
+    pub vfov: f32,
 }
 
 impl Camera {
@@ -29,13 +30,15 @@ impl Camera {
     //     glm::look_at(&self.position, &(self.position + self.front), &self.up)
     // }
 
-    pub fn new(aspect_ratio: f32, image_width: f32) -> Self {
+    pub fn new(aspect_ratio: f32, image_width: f32, vfov: f32) -> Self {
         let image_height = image_width / aspect_ratio;
         let center = glm::vec3(0.0, 0.0, 0.0);
 
         // Viewport dimensions
         let focal_length = 1.0;
-        let viewport_height = 2.0;
+        let theta = vfov.to_radians();
+        let h = (theta / 2.0).tan();
+        let viewport_height = 2.0 * h * focal_length;
         let viewport_width = viewport_height * aspect_ratio;
 
         // Vectors across the viewport edges
@@ -58,6 +61,7 @@ impl Camera {
             pixel00_loc,
             pixel_delta_u,
             pixel_delta_v,
+            vfov,
         }
     }
 
@@ -108,7 +112,10 @@ impl Default for Camera {
 
         // Viewport dimensions
         let focal_length = 1.0;
-        let viewport_height = 2.0;
+        let vfov: f32 = 90.0;
+        let theta = vfov.to_radians();
+        let h = (theta / 2.0).tan();
+        let viewport_height = 2.0 * h * focal_length;
         let viewport_width = viewport_height * aspect_ratio;
 
         // Vectors across the viewport edges
@@ -131,6 +138,7 @@ impl Default for Camera {
             pixel00_loc,
             pixel_delta_u,
             pixel_delta_v,
+            vfov,
         }
     }
 }
